@@ -91,10 +91,6 @@ export function Footer() {
                 <Phone className="w-5 h-5 text-primary mt-0.5" />
                 <span className="text-background/70">+1 (555) 123-4567</span>
               </li>
-              <li className="flex items-start gap-3">
-                <MapPin className="w-5 h-5 text-primary mt-0.5" />
-                <span className="text-background/70">123 Agriculture Way, Farm City, FC 12345</span>
-              </li>
             </ul>
           </motion.div>
         </div>

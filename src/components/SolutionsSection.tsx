@@ -2,6 +2,7 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { Thermometer, CloudRain, Activity, Zap, Shield, Globe } from "lucide-react";
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 
 const solutions = [
   {
@@ -29,16 +30,10 @@ const solutions = [
     features: ["Solar integration", "Load balancing", "Cost analytics"],
   },
   {
-    icon: Shield,
-    title: "Pest Management",
-    description: "Early detection and automated response to pest threats.",
-    features: ["Trap monitoring", "Alert systems", "Treatment scheduling"],
-  },
-  {
     icon: Globe,
     title: "Remote Access",
     description: "Control and monitor your farm from anywhere in the world.",
-    features: ["Mobile app", "Web dashboard", "Voice control"],
+    features: ["Mobile app", "Web dashboard"],
   },
 ];
 
@@ -82,9 +77,14 @@ export function SolutionsSection() {
                   <Icon className="w-6 h-6 text-primary" />
                 </div>
 
-                <h3 className="font-display text-lg font-semibold text-foreground mb-2">
-                  {solution.title}
-                </h3>
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="font-display text-lg font-semibold text-foreground">
+                    {solution.title}
+                  </h3>
+                  {solution.title.toLowerCase().includes("crop") && (
+                    <Badge variant="outline">Coming soon</Badge>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground mb-4">
                   {solution.description}
                 </p>
