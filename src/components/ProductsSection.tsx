@@ -6,21 +6,21 @@ import { Button } from "./ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 // Device images
-import airintelImg from "@/assets/devices/airintel.jpg";
-import hydrolevelImg from "@/assets/devices/hydrolevel.jpg";
-import powertraceImg from "@/assets/devices/powertrace.jpg";
-import lightsenseImg from "@/assets/devices/lightsense.jpg";
-import aquasenseImg from "@/assets/devices/aquasense.jpg";
-import climatecoreImg from "@/assets/devices/climatecore.jpg";
-import lumacontrolImg from "@/assets/devices/lumacontrol.jpg";
-import flowlogicImg from "@/assets/devices/flowlogic.jpg";
-import nutricoreImg from "@/assets/devices/nutricore.jpg";
-import nutrisyncImg from "@/assets/devices/nutrisync.jpg";
+import airintelImg from "@/assets/devices/airintel.png";
+import hydrolevelImg from "@/assets/devices/hydrolevel.png";
+import powertraceImg from "@/assets/devices/powertrace.png";
+import lightsenseImg from "@/assets/devices/lightsense.png";
+import aquasenseImg from "@/assets/devices/aquasense.png";
+import climatecoreImg from "@/assets/devices/climatecore.png";
+import lumacontrolImg from "@/assets/devices/lumacontrol.png";
+import flowlogicImg from "@/assets/devices/flowlogic.png";
+import nutricoreImg from "@/assets/devices/nutricore.png";
+import nutrisyncImg from "@/assets/devices/nutrisync.png";
 
 const sensors = [
   {
     icon: Thermometer,
-    name: "AirIntel",
+    name: "AeroSense",
     tagline: "Environmental Intelligence",
     description: "Monitors ambient temperature, humidity levels, and CO₂ concentration for optimal climate control",
     features: [
@@ -36,7 +36,7 @@ const sensors = [
   },
   {
     icon: Droplets,
-    name: "HydroLevel",
+    name: "AquaLevelX",
     tagline: "Water Level Precision",
     description: "Precise water level measurement in tanks with real-time volume tracking in litres",
     features: [
@@ -52,7 +52,7 @@ const sensors = [
   },
   {
     icon: Zap,
-    name: "PowerTrace",
+    name: "WattCore",
     tagline: "Energy Optimization",
     description: "Continuous electricity consumption monitoring measured in kWh for energy optimization",
     features: [
@@ -84,7 +84,7 @@ const sensors = [
   },
   {
     icon: TestTube,
-    name: "AquaSense",
+    name: "AquaAnalytics",
     tagline: "Water Quality Mastery",
     description: "Comprehensive water quality monitoring including EC, pH, dissolved oxygen, and temperature",
     features: [
@@ -103,7 +103,7 @@ const sensors = [
 const actuators = [
   {
     icon: Fan,
-    name: "ClimateCore",
+    name: "AeroControl",
     tagline: "Atmospheric Control",
     description: "Automated control of fans, air conditioning units, and air pumps to maintain ideal atmospheric conditions",
     features: [
@@ -119,7 +119,7 @@ const actuators = [
   },
   {
     icon: Lightbulb,
-    name: "LumaControl",
+    name: "LiteNode",
     tagline: "Intelligent Lighting",
     description: "Intelligent lighting management for rack systems and grow lights with programmable scheduling",
     features: [
@@ -135,7 +135,7 @@ const actuators = [
   },
   {
     icon: Settings,
-    name: "FlowLogic",
+    name: "HydroDrive",
     tagline: "Water Management",
     description: "Precision control of irrigation pumps, drainage systems, and solenoid valves for water management",
     features: [
@@ -151,7 +151,7 @@ const actuators = [
   },
   {
     icon: Beaker,
-    name: "NutriCore",
+    name: "DoseMaster",
     tagline: "Fertigation Excellence",
     description: "Advanced EC and pH fertigation controller ensuring optimal nutrient delivery",
     features: [
@@ -165,22 +165,22 @@ const actuators = [
     color: "from-green-500/20 to-emerald-500/20",
     iconColor: "text-green-500",
   },
-  {
-    icon: FlaskConical,
-    name: "NutriSync",
-    tagline: "Automated Balancing",
-    description: "Fully automated pH balancing and nutrient dosing system with precision injection",
-    features: [
-      "Auto pH Balancing",
-      "Nutrient Dosing",
-      "Precision Injection",
-      "Real-time Adjustments",
-      "Multi-zone Support",
-    ],
-    image: nutrisyncImg,
-    color: "from-lime-500/20 to-green-500/20",
-    iconColor: "text-lime-500",
-  },
+  // {
+  //   icon: FlaskConical,
+  //   name: "NutriSync",
+  //   tagline: "Automated Balancing",
+  //   description: "Fully automated pH balancing and nutrient dosing system with precision injection",
+  //   features: [
+  //     "Auto pH Balancing",
+  //     "Nutrient Dosing",
+  //     "Precision Injection",
+  //     "Real-time Adjustments",
+  //     "Multi-zone Support",
+  //   ],
+  //   image: nutrisyncImg,
+  //   color: "from-lime-500/20 to-green-500/20",
+  //   iconColor: "text-lime-500",
+  // },
 ];
 
 function ProductCard({ product, index }: { product: typeof sensors[0]; index: number }) {
@@ -279,7 +279,7 @@ export function ProductsSection() {
           className="text-center mb-12"
         >
           <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            FarmXOS Platform
+            Precision Monitoring & Control Systems
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
             Smart Sensing & Actuation Devices

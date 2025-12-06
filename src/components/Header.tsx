@@ -77,9 +77,11 @@ export function Header() {
                 Contact Us
               </a>
             </Button>
-            <Button variant="hero" size="lg">
-              Get Demo
-            </Button>
+             <a href="https://tally.so/r/Bzap8e" target="_blank" rel="noopener noreferrer" className="inline-block">
+              <Button variant="hero" size="lg">
+                Get Demo
+              </Button>
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
