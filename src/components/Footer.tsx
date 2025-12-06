@@ -82,13 +82,13 @@ export function Footer() {
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
                 <Mail className="w-5 h-5 text-primary mt-0.5" />
-                <a href="mailto:prashantkumar74887@gmail.com" className="text-background/70 hover:text-primary transition-colors">
-                  prashantkumar74887@gmail.com
+                <a href="mailto:contact@ezebuddies.com" className="text-background/70 hover:text-primary transition-colors">
+                  contact@ezebuddies.com
                 </a>
               </li>
               <li className="flex items-start gap-3">
                 <Phone className="w-5 h-5 text-primary mt-0.5" />
-                <span className="text-background/70">+1 (555) 123-4567</span>
+                {/* <span className="text-background/70">+1 (555) 123-4567</span> */}
               </li>
             </ul>
           </motion.div>

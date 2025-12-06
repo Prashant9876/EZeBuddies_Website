@@ -1,21 +1,21 @@
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef, useState } from "react";
-import { Thermometer, Droplets, Zap, Sun, TestTube, Fan, Lightbulb, Settings, Beaker, FlaskConical } from "lucide-react";
+import { Thermometer, Droplets, Zap, Sun, TestTube, Fan, Lightbulb, Settings, Beaker, FlaskConical, X, Check } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 // Device images
-import airintelImg from "@/assets/devices/airintel.png";
-import hydrolevelImg from "@/assets/devices/hydrolevel.png";
-import powertraceImg from "@/assets/devices/powertrace.png";
-import lightsenseImg from "@/assets/devices/lightsense.png";
-import aquasenseImg from "@/assets/devices/aquasense.png";
-import climatecoreImg from "@/assets/devices/climatecore.png";
-import lumacontrolImg from "@/assets/devices/lumacontrol.png";
-import flowlogicImg from "@/assets/devices/flowlogic.png";
-import nutricoreImg from "@/assets/devices/nutricore.png";
-import nutrisyncImg from "@/assets/devices/nutrisync.png";
+import airintelImg from "@/assets/devices/airintel.jpg";
+import hydrolevelImg from "@/assets/devices/hydrolevel.jpg";
+import powertraceImg from "@/assets/devices/powertrace.jpg";
+import lightsenseImg from "@/assets/devices/lightsense.jpg";
+import aquasenseImg from "@/assets/devices/aquasense.jpg";
+import climatecoreImg from "@/assets/devices/climatecore.jpg";
+import lumacontrolImg from "@/assets/devices/lumacontrol.jpg";
+import flowlogicImg from "@/assets/devices/flowlogic.jpg";
+import nutricoreImg from "@/assets/devices/nutricore.jpg";
+import nutrisyncImg from "@/assets/devices/nutrisync.jpg";
 
 const sensors = [
   {
@@ -119,7 +119,7 @@ const actuators = [
   },
   {
     icon: Lightbulb,
-    name: "LiteNode",
+    name: "LightNode",
     tagline: "Intelligent Lighting",
     description: "Intelligent lighting management for rack systems and grow lights with programmable scheduling",
     features: [
@@ -183,7 +183,80 @@ const actuators = [
   // },
 ];
 
-function ProductCard({ product, index }: { product: typeof sensors[0]; index: number }) {
+type ProductType = typeof sensors[0];
+
+function ProductDetailDialog({ product, open, onOpenChange }: { product: ProductType | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  if (!product) return null;
+  const Icon = product.icon;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-3 mb-2">
+            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${product.color} flex items-center justify-center`}>
+              <Icon className={`w-6 h-6 ${product.iconColor}`} />
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-primary uppercase tracking-wider block">
+                {product.tagline}
+              </span>
+              <DialogTitle className="font-display text-2xl font-bold">{product.name}</DialogTitle>
+            </div>
+          </div>
+        </DialogHeader>
+        
+        {/* Product Image */}
+        <div className="relative h-56 rounded-xl overflow-hidden mb-4">
+          <div className={`absolute inset-0 bg-gradient-to-br ${product.color} z-10 opacity-30`} />
+          <img 
+            src={product.image} 
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+        
+        <DialogDescription className="text-base text-muted-foreground mb-6">
+          {product.description}
+        </DialogDescription>
+        
+        {/* Features List */}
+        <div className="space-y-4">
+          <h4 className="font-semibold text-foreground flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary" />
+            Key Features
+          </h4>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {product.features.map((feature, i) => (
+              <motion.li 
+                key={i}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50"
+              >
+                <Check className="w-4 h-4 text-primary shrink-0" />
+                <span className="text-sm text-foreground">{feature}</span>
+              </motion.li>
+            ))}
+          </ul>
+        </div>
+        
+        {/* CTA */}
+        <div className="mt-6 pt-4 border-t border-border flex gap-3">
+          <Button variant="default" className="flex-1">
+            Request Quote
+          </Button>
+          <Button variant="outline" className="flex-1">
+            Download Specs
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProductCard({ product, index, onViewDetails }: { product: ProductType; index: number; onViewDetails: (product: ProductType) => void }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
   const Icon = product.icon;
@@ -250,7 +323,7 @@ function ProductCard({ product, index }: { product: typeof sensors[0]; index: nu
           ))}
         </ul>
 
-        <Button variant="default" size="sm" className="w-full group/btn">
+        <Button variant="default" size="sm" className="w-full group/btn" onClick={() => onViewDetails(product)}>
           <span>View Details</span>
           <motion.span 
             className="ml-2"
@@ -267,6 +340,13 @@ function ProductCard({ product, index }: { product: typeof sensors[0]; index: nu
 export function ProductsSection() {
   const headerRef = useRef(null);
   const isHeaderInView = useInView(headerRef, { once: true });
+  const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const handleViewDetails = (product: ProductType) => {
+    setSelectedProduct(product);
+    setDialogOpen(true);
+  };
 
   return (
     <section id="products" className="py-24 bg-muted/30">
@@ -311,7 +391,7 @@ export function ProductsSection() {
               className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
             >
               {sensors.map((product, index) => (
-                <ProductCard key={product.name} product={product} index={index} />
+                <ProductCard key={product.name} product={product} index={index} onViewDetails={handleViewDetails} />
               ))}
             </motion.div>
           </TabsContent>
@@ -324,12 +404,18 @@ export function ProductsSection() {
               className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
             >
               {actuators.map((product, index) => (
-                <ProductCard key={product.name} product={product} index={index} />
+                <ProductCard key={product.name} product={product} index={index} onViewDetails={handleViewDetails} />
               ))}
             </motion.div>
           </TabsContent>
         </Tabs>
       </div>
+
+      <ProductDetailDialog 
+        product={selectedProduct} 
+        open={dialogOpen} 
+        onOpenChange={setDialogOpen} 
+      />
     </section>
   );
 }

@@ -32,11 +32,6 @@ const features = [
     description: "Create automation rules between devices for seamless operation",
   },
   {
-    icon: MapPin,
-    title: "Multi-farm Support",
-    description: "Manage multiple farms from a single dashboard with ease",
-  },
-  {
     icon: Users,
     title: "User Management",
     description: "Assign roles and permissions to team members securely",

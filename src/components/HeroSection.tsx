@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Play } from "lucide-react";
 import { Button } from "./ui/button";
 import { FloatingLeaves } from "./FloatingLeaves";
+import { DemoRequestDialog } from "./DemoRequestDialog";
 
 export function HeroSection() {
+  const [demoDialogOpen, setDemoDialogOpen] = useState(false);
   return (
     <section id="home" className="relative min-h-screen bg-hero-gradient overflow-hidden pt-20">
       <FloatingLeaves />
@@ -58,36 +61,20 @@ export function HeroSection() {
               transition={{ delay: 0.5 }}
               className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
             >
-              <Button variant="hero" size="xl" className="group">
-                View Products
+              <Button variant="hero" size="xl" className="group" onClick={() => setDemoDialogOpen(true)}>
+                Get Demo
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button variant="glass" size="xl" className="group">
-                <Play className="w-5 h-5" />
-                Watch Demo
+              <Button variant="glass" size="xl" className="group" asChild>
+                <a href="#products">
+                  <Play className="w-5 h-5" />
+                  View Products
+                </a>
               </Button>
             </motion.div>
 
             {/* Stats */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="grid grid-cols-3 gap-8 mt-12 pt-12 border-t border-border/50"
-            >
-              {[
-                { value: "50+", label: "Farms Connected" },
-                { value: "10K+", label: "Sensors Deployed" },
-                { value: "99.9%", label: "Uptime" },
-              ].map((stat, index) => (
-                <div key={index} className="text-center lg:text-left">
-                  <div className="font-display text-2xl md:text-3xl font-bold text-foreground">
-                    {stat.value}
-                  </div>
-                  <div className="text-sm text-muted-foreground">{stat.label}</div>
-                </div>
-              ))}
-            </motion.div>
+            
           </motion.div>
 
           {/* Hero Image */}
@@ -143,6 +130,8 @@ export function HeroSection() {
           </motion.div>
         </div>
       </div>
+
+      <DemoRequestDialog open={demoDialogOpen} onOpenChange={setDemoDialogOpen} />
     </section>
   );
 }

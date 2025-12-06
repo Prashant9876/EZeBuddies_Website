@@ -70,18 +70,18 @@ export function Header() {
           <div className="hidden md:flex items-center gap-3">
             <Button variant="outline" size="lg" asChild>
               <a
-                href="https://mail.google.com/mail/?view=cm&fs=1&to=prashantkumar74887@gmail.com"
+                href="https://mail.google.com/mail/?view=cm&fs=1&to=contact@ezebuddies.com"
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 Contact Us
               </a>
             </Button>
-             <a href="https://tally.so/r/Bzap8e" target="_blank" rel="noopener noreferrer" className="inline-block">
+            {/* <a href="" target="_blank" rel="noopener noreferrer" className="inline-block">
               <Button variant="hero" size="lg">
-                Get Demo
+                Login
               </Button>
-            </a>
+            </a> */}
           </div>
 
           {/* Mobile Menu Button */}
@@ -121,7 +121,7 @@ export function Header() {
               <div className="flex flex-col gap-3 mt-4">
                 <Button variant="outline" size="lg" asChild>
                   <a
-                    href="https://mail.google.com/mail/?view=cm&fs=1&to=prashantkumar74887@gmail.com"
+                    href="https://mail.google.com/mail/?view=cm&fs=1&to=contact@ezebuddies.com"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -129,7 +129,7 @@ export function Header() {
                   </a>
                 </Button>
                 <Button variant="hero" size="lg">
-                  Get Demo
+                  Login
                 </Button>
               </div>
             </div>
