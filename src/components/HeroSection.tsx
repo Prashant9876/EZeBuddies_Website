@@ -4,6 +4,7 @@ import { ArrowRight, Play } from "lucide-react";
 import { Button } from "./ui/button";
 import { FloatingLeaves } from "./FloatingLeaves";
 import { DemoRequestDialog } from "./DemoRequestDialog";
+import mainImage from "@/assets/devices/main_image.png";
 
 export function HeroSection() {
   const [demoDialogOpen, setDemoDialogOpen] = useState(false);
@@ -87,7 +88,7 @@ export function HeroSection() {
             <div className="relative animate-float">
               <div className="absolute inset-0 bg-primary/20 rounded-3xl blur-3xl" />
               <img
-                src="https://images.unsplash.com/photo-1625246333195-78d9c38ad449?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80"
+                src={mainImage}
                 alt="Smart Farm with IoT Sensors"
                 className="relative rounded-3xl shadow-2xl w-full object-cover aspect-[4/3]"
               />
