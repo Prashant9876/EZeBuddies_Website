@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Leaf, Mail, Phone, MapPin, Facebook, Twitter, Linkedin, Instagram } from "lucide-react";
+import logo from "@/assets/devices/logo.png";
 
 export function Footer() {
   return (
@@ -12,8 +13,12 @@ export function Footer() {
             viewport={{ once: true }}
           >
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-                <Leaf className="w-5 h-5 text-primary-foreground" />
+              <div className="w-15 h-13 rounded-xl flex items-center justify-center">
+                <img
+                  src={logo}
+                  alt="EzeBuddies Logo"
+                  className="w-20 h-20 object-contain"
+                />
               </div>
               <span className="font-display font-bold text-xl">EzeBuddies</span>
             </div>
@@ -42,7 +47,7 @@ export function Footer() {
           >
             <h4 className="font-display font-semibold text-lg mb-6">Quick Links</h4>
             <ul className="space-y-3">
-              {["Home", "About Us", "Products", "Solutions", "Contact"].map((link) => (
+              {["Home", "About Us", "Solutions"].map((link) => (
                 <li key={link}>
                   <a href={`#${link.toLowerCase().replace(" ", "")}`} className="text-background/70 hover:text-primary transition-colors">
                     {link}
@@ -61,7 +66,7 @@ export function Footer() {
           >
             <h4 className="font-display font-semibold text-lg mb-6">Products</h4>
             <ul className="space-y-3">
-              {["AQI Device", "PPFD Sensor", "Water Level Monitor", "AC & Fan Controller", "Irrigation Controller"].map((product) => (
+              {["IRRIVA", "NUTRIVA", "CLIMVA", "FLOWVA", "LUMIVA"].map((product) => (
                 <li key={product}>
                   <a href="#products" className="text-background/70 hover:text-primary transition-colors">
                     {product}
