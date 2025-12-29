@@ -1,262 +1,334 @@
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef, useState } from "react";
-import { Thermometer, Droplets, Zap, Sun, TestTube, Fan, Lightbulb, Settings, Beaker, FlaskConical, X, Check } from "lucide-react";
+import { 
+  Zap, 
+  Thermometer, 
+  Droplets, 
+  Sun, 
+  AlertTriangle, 
+  Gauge, 
+  Wind,
+  Activity,
+  Waves,
+  Lightbulb,
+  Timer,
+  Shield,
+  Check,
+  ArrowRight,
+  Cpu
+} from "lucide-react";
 import { Button } from "./ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
-// Device images
-import airintelImg from "@/assets/devices/airintel.jpg";
-import hydrolevelImg from "@/assets/devices/hydrolevel.jpg";
-import powertraceImg from "@/assets/devices/powertrace.jpg";
-import lightsenseImg from "@/assets/devices/lightsense.jpg";
-import aquasenseImg from "@/assets/devices/aquasense.jpg";
-import climatecoreImg from "@/assets/devices/climatecore.jpg";
-import lumacontrolImg from "@/assets/devices/lumacontrol.jpg";
-import flowlogicImg from "@/assets/devices/flowlogic.jpg";
-import nutricoreImg from "@/assets/devices/nutricore.jpg";
-import nutrisyncImg from "@/assets/devices/nutrisync.jpg";
 
-const sensors = [
+// Import product images
+import irrivaImg from "@/assets/devices/irriva.png";
+import climvaImg from "@/assets/devices/climatecore.jpg";
+import flowvaImg from "@/assets/devices/hydrolevel.png";
+import lumivaImg from "@/assets/devices/lumacontrol.jpg";
+import nutrivaImg from "@/assets/devices/nutriva.png";
+
+// Product packages for smart irrigation and fertigation
+const products = [
   {
-    icon: Thermometer,
-    name: "AeroSense",
-    tagline: "Environmental Intelligence",
-    description: "Monitors ambient temperature, humidity levels, and CO₂ concentration for optimal climate control",
-    features: [
-      "Temperature Monitoring (°C)",
-      "Humidity Levels (%)",
-      "CO₂ Concentration (ppm)",
-      "Real-time Data Streaming",
-      "Edge Computing Ready",
-    ],
-    image: airintelImg,
-    color: "from-blue-500/20 to-cyan-500/20",
-    iconColor: "text-blue-500",
-  },
-  {
-    icon: Droplets,
-    name: "AquaLevelX",
-    tagline: "Water Level Precision",
-    description: "Precise water level measurement in tanks with real-time volume tracking in litres",
-    features: [
-      "Ultrasonic Level Detection",
-      "Real-time Volume Tracking",
-      "Tank Capacity Monitoring",
-      "Low Level Alerts",
-      "Multi-tank Support",
-    ],
-    image: hydrolevelImg,
-    color: "from-cyan-500/20 to-teal-500/20",
-    iconColor: "text-cyan-500",
-  },
-  {
+    id: "irriva",
+    name: "IRRIVA",
+    tagline: "Smart Motor Controller",
+    subtitle: "Irrigation & Motor Intelligence",
+    description: "Complete motor control package with intelligent monitoring for pumps and irrigation systems. Features Real-time voltage/current tracking, Dry run protection, and anomaly detection for reliable operation.",
+    heroGradient: "from-emerald-500 via-green-500 to-teal-500",
+    cardGradient: "from-emerald-500/20 via-green-500/10 to-transparent",
+    glowColor: "shadow-emerald-500/30",
+    accentColor: "text-emerald-400",
+    bgPattern: "bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))]",
     icon: Zap,
-    name: "WattCore",
-    tagline: "Energy Optimization",
-    description: "Continuous electricity consumption monitoring measured in kWh for energy optimization",
+    image: irrivaImg,
     features: [
-      "Real-time kWh Monitoring",
-      "Power Consumption Analytics",
-      "Energy Cost Calculation",
-      "Peak Usage Detection",
-      "Efficiency Reports",
+      { icon: Activity, label: "Motor ON/OFF Control", desc: "Remote motor switching" },
+      { icon: Gauge, label: "Voltage Monitoring", desc: "Real-time V tracking" },
+      { icon: Zap, label: "Current Consumption", desc: "Ampere measurement" },
+      { icon: AlertTriangle, label: "Dry Run Detection", desc: "Anomaly protection" },
+      { icon: Shield, label: "Overload Protection", desc: "Auto-cutoff safety" },
+      { icon: Timer, label: "Scheduled Operation", desc: "Timer-based control" },
     ],
-    image: powertraceImg,
-    color: "from-amber-500/20 to-orange-500/20",
-    iconColor: "text-amber-500",
+    specs: [
+      "3-Phase & Single Phase Support",
+      "0-440V Voltage Range",
+      "0-80A Current Range", 
+      "LoRa & WiFi Connectivity",
+      "IP65 Weatherproof Rating",
+      "Dry Run Protection",
+      
+    ]
   },
   {
+    id: "nutriva",
+    name: "NUTRIVA",
+    tagline: "Smart Fertigation Controller",
+    subtitle: "Precision Nutrition & Irrigation Intelligence",
+    description: "Complete fertigation control package with intelligent nutrient dosing and irrigation management for modern farms and hydroponic systems. Features real-time EC/pH monitoring, automated nutrient mixing, and scheduled fertigation for precise and reliable crop nutrition.",
+    heroGradient: "from-sky-500 via-blue-500 to-indigo-500",
+    cardGradient: "from-sky-500/20 via-blue-500/10 to-transparent",
+    glowColor: "shadow-sky-500/30",
+    accentColor: "text-sky-400",
+    bgPattern: "bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))]",
+    icon: Thermometer,
+    image: nutrivaImg,
+    features: [
+      { icon: Thermometer, label: "Nutrient Dosing Control", desc: "Precise fertilizer injection automation" },
+      { icon: Droplets, label: "EC & pHMonitoring ", desc: "Real-time Tracking" },
+      { icon: Wind, label: "Scheduled Fertigation", desc: "Timer & stage-based nutrient delivery" },
+      { icon: Activity, label: "Remote Control", desc: "Cloud-based monitoring & control" },
+      { icon: AlertTriangle, label: "Anomaly Detection", desc: "Custom notifications" },
+      { icon: Cpu, label: "Edge Computing", desc: "Local processing" },
+    ],
+    specs: [
+      "Single & Multi-channel Dosing Support",
+      "EC Range: 0–3 mS/cm",
+      "pH Range: 0–14",
+      "LoRa & WiFi Connectivity",
+      "Manual & Automatic Operation Modes"
+    ]
+  },
+  {
+    id: "climva",
+    name: "CLIMVA",
+    tagline: "Climate Intelligence Hub",
+    subtitle: "Temperature • Humidity • CO₂",
+    description: "Advanced environmental monitoring package for greenhouses and controlled environments. Precision sensors deliver real-time climate data for optimal growing conditions.",
+    heroGradient: "from-sky-500 via-blue-500 to-indigo-500",
+    cardGradient: "from-sky-500/20 via-blue-500/10 to-transparent",
+    glowColor: "shadow-sky-500/30",
+    accentColor: "text-sky-400",
+    bgPattern: "bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))]",
+    icon: Thermometer,
+    image: climvaImg,
+    features: [
+      { icon: Thermometer, label: "Temperature Sensing", desc: "-40°C to 80°C range" },
+      { icon: Droplets, label: "Humidity Monitoring", desc: "0-100% RH accuracy" },
+      { icon: Wind, label: "CO₂ Concentration", desc: "0-5000ppm detection" },
+      { icon: Activity, label: "Real-time Streaming", desc: "10-Minute intervals" },
+      { icon: AlertTriangle, label: "Threshold Alerts", desc: "Custom notifications" },
+      { icon: Cpu, label: "Edge Computing", desc: "Local processing" },
+    ],
+    specs: [
+      "±0.2°C Temperature Accuracy",
+      "±2% Humidity Accuracy",
+      "NDIR CO₂ Sensor Technology",
+      "LoRa & WiFi Connectivity",
+      "5-Year Sensor Lifespan"
+    ]
+  },
+  {
+    id: "flowva",
+    name: "FLOWVA",
+    tagline: "Tank & Flow Automation",
+    subtitle: "Water Level • Flow Control",
+    description: "Intelligent water management system for tanks and reservoirs. Ultrasonic level sensing combined with automated pump control for efficient water distribution.",
+    heroGradient: "from-cyan-500 via-teal-500 to-emerald-500",
+    cardGradient: "from-cyan-500/20 via-teal-500/10 to-transparent",
+    glowColor: "shadow-cyan-500/30",
+    accentColor: "text-cyan-400",
+    bgPattern: "bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))]",
+    icon: Waves,
+    image: flowvaImg,
+    features: [
+      { icon: Waves, label: "Water Level Sensing", desc: "Ultrasonic precision" },
+      { icon: Gauge, label: "Volume Calculation", desc: "Liters/gallons display" },
+    
+      { icon: Zap, label: "Pump Automation", desc: "Auto fill/drain" },
+      { icon: AlertTriangle, label: "Overflow Protection", desc: "Smart cutoffs" },
+    ],
+    specs: [
+      "0.5-6m Detection Range",
+      "±3 cm Level Accuracy",
+      "LoRa & WiFi Connectivity",
+      "IP68 Submersible Option",
+    ]
+  },
+  {
+    id: "lumiva",
+    name: "LUMIVA",
+    tagline: "Hydroponics Light Control",
+    subtitle: "Grow Light • Photoperiod • DLI",
+    description: "Precision lighting controller designed for hydroponics and vertical farming. Intelligent spectrum management and photoperiod scheduling for maximum crop yield.",
+    heroGradient: "from-violet-500 via-purple-500 to-fuchsia-500",
+    cardGradient: "from-violet-500/20 via-purple-500/10 to-transparent",
+    glowColor: "shadow-violet-500/30",
+    accentColor: "text-violet-400",
+    bgPattern: "bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))]",
     icon: Sun,
-    name: "LightSense",
-    tagline: "Light Intelligence",
-    description: "Accurate light intensity measurement in lux for photosynthesis and energy management",
+    image: lumivaImg,
     features: [
-      "Lux Intensity Measurement",
-      "PAR Light Monitoring",
-      "DLI Calculation",
-      "Spectrum Analysis",
-      "Growth Optimization",
+      { icon: Sun, label: "Lux Measurement", desc: "0-200,000 lux range" },
+      { icon: Lightbulb, label: "Grow Light Control", desc: "PWM dimming" },
+      { icon: Timer, label: "Photoperiod Scheduling", desc: "Sunrise/sunset" },
+      { icon: Activity, label: "DLI Calculation", desc: "Daily light integral" },
+      { icon: Gauge, label: "Spectrum Analysis", desc: "PAR monitoring" },
+      { icon: Cpu, label: "Zone Management", desc: "Multi-rack support" },
     ],
-    image: lightsenseImg,
-    color: "from-yellow-500/20 to-amber-500/20",
-    iconColor: "text-yellow-500",
-  },
-  {
-    icon: TestTube,
-    name: "AquaAnalytics",
-    tagline: "Water Quality Mastery",
-    description: "Comprehensive water quality monitoring including EC, pH, dissolved oxygen, and temperature",
-    features: [
-      "EC Conductivity Monitoring",
-      "pH Level Tracking",
-      "Dissolved Oxygen (DO)",
-      "Water Temperature",
-      "Nutrient Balance Alerts",
-    ],
-    image: aquasenseImg,
-    color: "from-emerald-500/20 to-green-500/20",
-    iconColor: "text-emerald-500",
-  },
+    specs: [
+      "0-10V & PWM Dimming",
+      "Up to 16 Light Zones",
+      "PAR Sensor Integration",
+      "Sunrise/Sunset Simulation",
+      "DMX512 Protocol Support",
+      "Energy Usage Analytics"
+    ]
+  }
 ];
 
-const actuators = [
-  {
-    icon: Fan,
-    name: "AeroControl",
-    tagline: "Atmospheric Control",
-    description: "Automated control of fans, air conditioning units, and air pumps to maintain ideal atmospheric conditions",
-    features: [
-      "Fan Speed Automation",
-      "AC Unit Control",
-      "Air Pump Management",
-      "Temperature-based Logic",
-      "Energy-efficient Operation",
-    ],
-    image: climatecoreImg,
-    color: "from-sky-500/20 to-blue-500/20",
-    iconColor: "text-sky-500",
-  },
-  {
-    icon: Lightbulb,
-    name: "LightNode",
-    tagline: "Intelligent Lighting",
-    description: "Intelligent lighting management for rack systems and grow lights with programmable scheduling",
-    features: [
-      "Rack Lighting Control",
-      "Grow Light Management",
-      "Programmable Scheduling",
-      "Spectrum Adjustment",
-      "Photoperiod Automation",
-    ],
-    image: lumacontrolImg,
-    color: "from-purple-500/20 to-violet-500/20",
-    iconColor: "text-purple-500",
-  },
-  {
-    icon: Settings,
-    name: "HydroDrive",
-    tagline: "Water Management",
-    description: "Precision control of irrigation pumps, drainage systems, and solenoid valves for water management",
-    features: [
-      "Irrigation Pump Control",
-      "Drainage Automation",
-      "Solenoid Valve Management",
-      "Flow Rate Monitoring",
-      "Scheduled Watering",
-    ],
-    image: flowlogicImg,
-    color: "from-teal-500/20 to-cyan-500/20",
-    iconColor: "text-teal-500",
-  },
-  {
-    icon: Beaker,
-    name: "DoseMaster",
-    tagline: "Fertigation Excellence",
-    description: "Advanced EC and pH fertigation controller ensuring optimal nutrient delivery",
-    features: [
-      "EC-based Dosing",
-      "pH Level Control",
-      "Nutrient Mix Automation",
-      "Precision Injection",
-      "Recipe Management",
-    ],
-    image: nutricoreImg,
-    color: "from-green-500/20 to-emerald-500/20",
-    iconColor: "text-green-500",
-  },
-  // {
-  //   icon: FlaskConical,
-  //   name: "NutriSync",
-  //   tagline: "Automated Balancing",
-  //   description: "Fully automated pH balancing and nutrient dosing system with precision injection",
-  //   features: [
-  //     "Auto pH Balancing",
-  //     "Nutrient Dosing",
-  //     "Precision Injection",
-  //     "Real-time Adjustments",
-  //     "Multi-zone Support",
-  //   ],
-  //   image: nutrisyncImg,
-  //   color: "from-lime-500/20 to-green-500/20",
-  //   iconColor: "text-lime-500",
-  // },
-];
+type ProductType = typeof products[0];
 
-type ProductType = typeof sensors[0];
-
-function ProductDetailDialog({ product, open, onOpenChange }: { product: ProductType | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+function ProductDetailDialog({ 
+  product, 
+  open, 
+  onOpenChange 
+}: { 
+  product: ProductType | null; 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void 
+}) {
   if (!product) return null;
   const Icon = product.icon;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-3 mb-2">
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${product.color} flex items-center justify-center`}>
-              <Icon className={`w-6 h-6 ${product.iconColor}`} />
-            </div>
-            <div>
-              <span className="text-xs font-semibold text-primary uppercase tracking-wider block">
-                {product.tagline}
-              </span>
-              <DialogTitle className="font-display text-2xl font-bold">{product.name}</DialogTitle>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+        {/* Hero Header with Image */}
+        <div className={`relative bg-gradient-to-br ${product.heroGradient} overflow-hidden`}>
+          <div className="absolute inset-0 bg-black/20" />
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30" />
+          
+          <div className="relative z-10 grid md:grid-cols-2 gap-6 p-6 md:p-8">
+            {/* Product Info */}
+            <DialogHeader className="flex flex-col justify-center">
+              <div className="flex items-center gap-4 mb-4">
+                <motion.div 
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", duration: 0.8 }}
+                  className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/30"
+                >
+                  <Icon className="w-8 h-8 text-white" />
+                </motion.div>
+                <div>
+                  <span className="text-sm font-medium text-white/80 uppercase tracking-wider">
+                    {product.tagline}
+                  </span>
+                  <DialogTitle className="font-display text-3xl font-bold text-white">
+                    {product.name}
+                  </DialogTitle>
+                  <span className="text-white/70 text-sm">{product.subtitle}</span>
+                </div>
+              </div>
+              <p className="text-white/90 text-sm md:text-base leading-relaxed">
+                {product.description}
+              </p>
+            </DialogHeader>
+            
+            {/* Product Image */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, x: 20 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="relative"
+            >
+              <div className="relative rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl">
+                <img 
+                  src={product.image} 
+                  alt={product.name}
+                  className="w-full h-48 md:h-64 object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                  <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-white text-xs font-medium border border-white/30">
+
+                  </span>
+                  <span className={`px-3 py-1 rounded-full bg-gradient-to-r ${product.heroGradient} text-white text-xs font-semibold`}>
+                    {product.name}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+        
+        <div className="p-6 space-y-6">
+          <DialogDescription className="sr-only">
+            {product.description}
+          </DialogDescription>
+          
+          {/* Features Grid */}
+          <div>
+            <h4 className="font-semibold text-foreground flex items-center gap-2 mb-4">
+              <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`} />
+              Key Capabilities
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {product.features.map((feature, i) => {
+                const FeatureIcon = feature.icon;
+                return (
+                  <motion.div 
+                    key={i}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="p-3 rounded-xl bg-muted/50 border border-border/50 hover:border-primary/30 transition-colors group"
+                  >
+                    <FeatureIcon className={`w-5 h-5 ${product.accentColor} mb-2 group-hover:scale-110 transition-transform`} />
+                    <span className="text-sm font-medium text-foreground block">{feature.label}</span>
+                    <span className="text-xs text-muted-foreground">{feature.desc}</span>
+                  </motion.div>
+                );
+              })}
             </div>
           </div>
-        </DialogHeader>
-        
-        {/* Product Image */}
-        <div className="relative h-56 rounded-xl overflow-hidden mb-4">
-          <div className={`absolute inset-0 bg-gradient-to-br ${product.color} z-10 opacity-30`} />
-          <img 
-            src={product.image} 
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
-        </div>
-        
-        <DialogDescription className="text-base text-muted-foreground mb-6">
-          {product.description}
-        </DialogDescription>
-        
-        {/* Features List */}
-        <div className="space-y-4">
-          <h4 className="font-semibold text-foreground flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary" />
-            Key Features
-          </h4>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {product.features.map((feature, i) => (
-              <motion.li 
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border/50"
-              >
-                <Check className="w-4 h-4 text-primary shrink-0" />
-                <span className="text-sm text-foreground">{feature}</span>
-              </motion.li>
-            ))}
-          </ul>
-        </div>
-        
-        {/* CTA */}
-        <div className="mt-6 pt-4 border-t border-border flex gap-3">
-          <Button variant="default" className="flex-1">
-            Request Quote
-          </Button>
-          <Button variant="outline" className="flex-1">
-            Download Specs
-          </Button>
+
+          {/* Technical Specs */}
+          <div>
+            <h4 className="font-semibold text-foreground flex items-center gap-2 mb-4">
+              <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`} />
+              Technical Specifications
+            </h4>
+            <div className="grid grid-cols-2 gap-2">
+              {product.specs.map((spec, i) => (
+                <motion.div 
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.03 }}
+                  className="flex items-center gap-2 p-2 rounded-lg"
+                >
+                  <Check className={`w-4 h-4 ${product.accentColor} shrink-0`} />
+                  <span className="text-sm text-foreground">{spec}</span>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+          
+          {/* CTA */}
+          <div className="pt-4 border-t border-border flex gap-3">
+            <Button className={`flex-1 bg-gradient-to-r ${product.heroGradient} text-white hover:opacity-90`}>
+              Request Quote
+            </Button>
+            
+          </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function ProductCard({ product, index, onViewDetails }: { product: ProductType; index: number; onViewDetails: (product: ProductType) => void }) {
+function ProductCard({ 
+  product, 
+  index, 
+  onViewDetails 
+}: { 
+  product: ProductType; 
+  index: number; 
+  onViewDetails: (product: ProductType) => void 
+}) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
   const Icon = product.icon;
@@ -265,73 +337,100 @@ function ProductCard({ product, index, onViewDetails }: { product: ProductType; 
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: 50 }}
+      initial={{ opacity: 0, y: 60 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, delay: index * 0.1 }}
-      className="group relative bg-card rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 border border-border/50"
+      transition={{ duration: 0.7, delay: index * 0.15 }}
+      className="group relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Image Section */}
-      <div className="relative h-48 overflow-hidden">
-        <div className={`absolute inset-0 bg-gradient-to-br ${product.color} z-10`} />
-        <img 
-          src={product.image} 
-          alt={product.name}
-          className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-20" />
-        
-        {/* Floating Icon */}
-        <motion.div 
-          className={`absolute bottom-4 right-4 w-12 h-12 rounded-xl bg-background/90 backdrop-blur-sm flex items-center justify-center shadow-lg z-30`}
-          animate={isHovered ? { scale: 1.1, rotate: 5 } : { scale: 1, rotate: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <Icon className={`w-6 h-6 ${product.iconColor}`} />
-        </motion.div>
-      </div>
-
-      {/* Content Section */}
-      <div className="p-6">
-        <div className="mb-3">
-          <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-            {product.tagline}
-          </span>
-        </div>
-        
-        <h3 className="font-display text-xl font-bold text-foreground mb-2">
-          {product.name}
-        </h3>
-        
-        <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-          {product.description}
-        </p>
-
-        <ul className="space-y-2 mb-5">
-          {product.features.slice(0, 4).map((feature, i) => (
-            <motion.li 
-              key={i} 
-              className="flex items-center gap-2 text-sm text-muted-foreground"
-              initial={{ opacity: 0, x: -10 }}
-              animate={isInView ? { opacity: 1, x: 0 } : {}}
-              transition={{ delay: index * 0.1 + i * 0.05 + 0.3 }}
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-              <span>{feature}</span>
-            </motion.li>
-          ))}
-        </ul>
-
-        <Button variant="default" size="sm" className="w-full group/btn" onClick={() => onViewDetails(product)}>
-          <span>View Details</span>
-          <motion.span 
-            className="ml-2"
-            animate={isHovered ? { x: 4 } : { x: 0 }}
+      {/* Glow Effect */}
+      <motion.div 
+        className={`absolute -inset-1 rounded-3xl bg-gradient-to-r ${product.heroGradient} opacity-0 blur-xl transition-opacity duration-500`}
+        animate={{ opacity: isHovered ? 0.3 : 0 }}
+      />
+      
+      <div className={`relative bg-card rounded-2xl overflow-hidden border border-border/50 hover:border-primary/30 transition-all duration-500 ${product.glowColor} hover:shadow-2xl`}>
+        {/* Header with Product Image */}
+        <div className={`relative h-48 overflow-hidden`}>
+          {/* Product Image */}
+          <img 
+            src={product.image} 
+            alt={product.name}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          
+          {/* Gradient overlay */}
+          <div className={`absolute inset-0 bg-gradient-to-t ${product.cardGradient} opacity-90`} />
+          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
+          
+          {/* Floating particles */}
+          <motion.div
+            animate={{ y: [0, -10, 0], opacity: [0.3, 0.6, 0.3] }}
+            transition={{ duration: 3, repeat: Infinity }}
+            className={`absolute top-6 right-6 w-3 h-3 rounded-full bg-gradient-to-r ${product.heroGradient}`}
+          />
+          <motion.div
+            animate={{ y: [0, 10, 0], opacity: [0.2, 0.5, 0.2] }}
+            transition={{ duration: 4, repeat: Infinity, delay: 0.5 }}
+            className={`absolute top-16 right-16 w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`}
+          />
+          
+          {/* Icon and Title */}
+          <motion.div 
+            className="absolute bottom-4 left-6 right-6 flex items-center gap-4"
+            animate={isHovered ? { scale: 1.02 } : { scale: 1 }}
+            transition={{ duration: 0.3 }}
           >
-            →
-          </motion.span>
-        </Button>
+            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${product.heroGradient} flex items-center justify-center shadow-lg shrink-0`}>
+              <Icon className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h3 className="font-display text-2xl font-bold text-foreground tracking-tight">
+                {product.name}
+              </h3>
+              <span className={`text-xs font-semibold ${product.accentColor} uppercase tracking-wider`}>
+                {product.tagline}
+              </span>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 pt-4">
+          <p className="text-sm text-muted-foreground mb-5 line-clamp-2">
+            {product.description}
+          </p>
+
+          {/* Features pills */}
+          <div className="flex flex-wrap gap-2 mb-5">
+            {product.features.slice(0, 4).map((feature, i) => (
+              <motion.span
+                key={i}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={isInView ? { opacity: 1, scale: 1 } : {}}
+                transition={{ delay: index * 0.1 + i * 0.05 + 0.3 }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 text-xs font-medium text-foreground border border-border/50"
+              >
+                <feature.icon className={`w-3 h-3 ${product.accentColor}`} />
+                {feature.label}
+              </motion.span>
+            ))}
+          </div>
+
+          <Button 
+            className={`w-full bg-gradient-to-r ${product.heroGradient} text-white hover:opacity-90 transition-opacity group/btn`}
+            onClick={() => onViewDetails(product)}
+          >
+            <span>Explore {product.name}</span>
+            <motion.span 
+              className="ml-2"
+              animate={isHovered ? { x: 4 } : { x: 0 }}
+            >
+              <ArrowRight className="w-4 h-4" />
+            </motion.span>
+          </Button>
+        </div>
       </div>
     </motion.div>
   );
@@ -349,66 +448,61 @@ export function ProductsSection() {
   };
 
   return (
-    <section id="products" className="py-24 bg-muted/30">
-      <div className="container mx-auto px-6">
+    <section id="products" className="py-24 bg-muted/30 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIHBhdHRlcm5Vbml0cz0idXNlclNwYWNlT25Vc2UiPjxjaXJjbGUgY3g9IjUwIiBjeT0iNTAiIHI9IjEiIGZpbGw9ImN1cnJlbnRDb2xvciIgZmlsbC1vcGFjaXR5PSIwLjA1Ii8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-50" />
+      
+      <div className="container mx-auto px-6 relative z-10">
         <motion.div
           ref={headerRef}
           initial={{ opacity: 0, y: 30 }}
           animate={isHeaderInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6 }}
-          className="text-center mb-12"
+          className="text-center mb-16"
         >
-          <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            Precision Monitoring & Control Systems
-          </span>
-          <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Smart Sensing & Actuation Devices
+          {/* Badge */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={isHeaderInView ? { opacity: 1, scale: 1 } : {}}
+            transition={{ delay: 0.2 }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6"
+          >
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-sm font-semibold text-primary">IntelliControl</span>
+          </motion.div>
+          
+          <h2 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
+            <span className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 bg-clip-text text-transparent">
+              Intelligent
+            </span>{" "}
+            Control Systems
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Five specialized sensors and five powerful actuators deliver comprehensive environmental monitoring with precision accuracy
+          <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+            Four integrated product packages designed for modern agriculture. From motor control to climate monitoring, 
+            water management to lighting automation — everything you need for precision farming.
           </p>
         </motion.div>
 
-        <Tabs defaultValue="sensors" className="w-full">
-          <div className="flex justify-center mb-10">
-            <TabsList className="glass px-2 py-6">
-              <TabsTrigger value="sensors" className="px-6 py-2.5 text-sm font-medium">
-                <TestTube className="w-4 h-4 mr-2" />
-                Sensors (5)
-              </TabsTrigger>
-              <TabsTrigger value="actuators" className="px-6 py-2.5 text-sm font-medium">
-                <Settings className="w-4 h-4 mr-2" />
-                Actuators (5)
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        {/* Products Grid */}
+        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          {products.map((product, index) => (
+            <ProductCard 
+              key={product.id} 
+              product={product} 
+              index={index} 
+              onViewDetails={handleViewDetails} 
+            />
+          ))}
+        </div>
 
-          <TabsContent value="sensors">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
-            >
-              {sensors.map((product, index) => (
-                <ProductCard key={product.name} product={product} index={index} onViewDetails={handleViewDetails} />
-              ))}
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="actuators">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
-            >
-              {actuators.map((product, index) => (
-                <ProductCard key={product.name} product={product} index={index} onViewDetails={handleViewDetails} />
-              ))}
-            </motion.div>
-          </TabsContent>
-        </Tabs>
+        {/* Bottom CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={isHeaderInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ delay: 0.8 }}
+          className="text-center mt-16"
+        >
+        </motion.div>
       </div>
 
       <ProductDetailDialog 
