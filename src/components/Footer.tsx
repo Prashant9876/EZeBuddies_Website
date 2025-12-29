@@ -88,7 +88,7 @@ export function Footer() {
               </li>
               <li className="flex items-start gap-3">
                 <Phone className="w-5 h-5 text-primary mt-0.5" />
-                {/* <span className="text-background/70">+1 (555) 123-4567</span> */}
+                <span className="text-background/70">+91 8757184033</span>
               </li>
             </ul>
           </motion.div>
