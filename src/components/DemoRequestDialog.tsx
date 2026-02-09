@@ -78,6 +78,11 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
       location: formData.location,
       message: formData.message,
     }
+    console.log("EmailJS ENV CHECK", {
+      serviceId: import.meta.env.VITE_EMAILJS_SERVICE_ID,
+      templateId: import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
+      publicKey: import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
+    });
 
     emailjs.send(serviceId,templateId,templateParams,publicKey).then((Response) => {
       console.log('SUCCESS!', Response.status, Response.text);
