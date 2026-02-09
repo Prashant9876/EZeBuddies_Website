@@ -65,7 +65,8 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
 
     const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
     const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
-    const userId = import.meta.env.VITE_EMAILJS_USER_ID
+    const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+
 
 
     const templateParams = {
@@ -78,7 +79,7 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
       message: formData.message,
     }
 
-    emailjs.send('YOUR_SERVICE_ID', 'YOUR_TEMPLATE_ID', templateParams, 'YOUR_USER_ID').then((Response) => {
+    emailjs.send(serviceId,templateId,templateParams,publicKey).then((Response) => {
       console.log('SUCCESS!', Response.status, Response.text);
       toast({
         title: "Demo Request Sent",
