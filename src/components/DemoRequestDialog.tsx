@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Send, User, Mail, Phone, MapPin, Leaf } from "lucide-react";
+import { Send, User, Mail, Phone, MapPin, Cpu } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -27,23 +27,22 @@ interface DemoRequestDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const farmTypes = [
-  "Vertical Farm",
-  "Greenhouse",
+const siteTypes = [
   "Open Field",
-  "Hydroponics",
-  "Aquaponics",
-  "Polyhouse",
+  "CEA / Greenhouse",
+  "Parks & Landscaping",
+  "Stadium",
+  "Industrial Utility",
+  "Commercial Building",
   "Other",
 ];
 
-const areaRanges = [
-  "Less than 1 acre",
-  "1-5 acres",
-  "5-10 acres",
-  "10-50 acres",
-  "50-100 acres",
-  "More than 100 acres",
+const deploymentSizes = [
+  "Single site",
+  "2-5 sites",
+  "5-20 sites",
+  "20+ sites",
+  "Large enterprise rollout",
 ];
 
 export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps) {
@@ -54,14 +53,15 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
     name: "",
     email: "",
     phone: "",
-    farmType: "",
-    area: "",
+    siteType: "",
+    deploymentSize: "",
     location: "",
     message: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
     const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
     const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
@@ -73,8 +73,8 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
       name: formData.name,
       email: formData.email,
       phone: formData.phone,
-      farm_type: formData.farmType,
-      area: formData.area,
+      farm_type: formData.siteType,
+      area: formData.deploymentSize,
       location: formData.location,
       message: formData.message,
     }
@@ -91,11 +91,12 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
         name: "",
         email: "",
         phone: "",
-        farmType: "",
-        area: "",
+        siteType: "",
+        deploymentSize: "",
         location: "",
         message: "",
       });
+      setIsSubmitting(false);
     })
       .catch((error) => {
         console.error('ERROR...', error);
@@ -104,6 +105,7 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
           description: "Something went wrong. Please try again later.",
           variant: "destructive",
         });
+        setIsSubmitting(false);
       })
   };
 
@@ -113,14 +115,14 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
         <DialogHeader>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-              <Leaf className="w-6 h-6 text-primary" />
+              <Cpu className="w-6 h-6 text-primary" />
             </div>
             <div>
               <DialogTitle className="font-display text-xl font-bold">
-                Request a Demo
+                Request a Consultation
               </DialogTitle>
               <DialogDescription className="text-sm">
-                Fill in your details and we'll get back to you
+                Share your requirement and we will suggest the right device stack
               </DialogDescription>
             </div>
           </div>
@@ -174,23 +176,23 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
             </div>
           </div>
 
-          {/* Farm Type & Area */}
+          {/* Site Type & Deployment */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                <Leaf className="w-4 h-4 text-muted-foreground" />
-                Farm Type
+                <Cpu className="w-4 h-4 text-muted-foreground" />
+                Site Type
               </Label>
               <Select
-                value={formData.farmType}
-                onValueChange={(value) => setFormData({ ...formData, farmType: value })}
+                value={formData.siteType}
+                onValueChange={(value) => setFormData({ ...formData, siteType: value })}
                 required
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select farm type" />
+                  <SelectValue placeholder="Select site type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {farmTypes.map((type) => (
+                  {siteTypes.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
                     </SelectItem>
@@ -201,18 +203,18 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-muted-foreground" />
-                Farm Area
+                Deployment Size
               </Label>
               <Select
-                value={formData.area}
-                onValueChange={(value) => setFormData({ ...formData, area: value })}
+                value={formData.deploymentSize}
+                onValueChange={(value) => setFormData({ ...formData, deploymentSize: value })}
                 required
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select area" />
+                  <SelectValue placeholder="Select deployment size" />
                 </SelectTrigger>
                 <SelectContent>
-                  {areaRanges.map((range) => (
+                  {deploymentSizes.map((range) => (
                     <SelectItem key={range} value={range}>
                       {range}
                     </SelectItem>
@@ -268,7 +270,7 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
               ) : (
                 <>
                   <Send className="w-4 h-4 mr-2" />
-                  Submit Request
+                  Submit Inquiry
                 </>
               )}
             </Button>

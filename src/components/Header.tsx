@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Leaf, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button } from "./ui/button";
 import logoImg from "@/assets/devices/logo.png";
 
 const navLinks = [
   { name: "Home", href: "#home" },
-  { name: "About Us", href: "#about" },
+  { name: "Use-cases", href: "#use-cases" },
   { name: "Products", href: "#products" },
+  { name: "About Us", href: "#about" },
   { name: "Solutions", href: "#solutions" },
 ];
 
@@ -77,7 +78,7 @@ export function Header() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Contact Us
+                Talk to Sales
               </a>
             </Button>
             {/* <a href="" target="_blank" rel="noopener noreferrer" className="inline-block">
@@ -128,11 +129,8 @@ export function Header() {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Contact Us
+                    Talk to Sales
                   </a>
-                </Button>
-                <Button variant="hero" size="lg">
-                  Login
                 </Button>
               </div>
             </div>

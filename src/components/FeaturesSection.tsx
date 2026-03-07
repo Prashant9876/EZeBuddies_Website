@@ -5,7 +5,6 @@ import {
   Bell,
   RefreshCw,
   Bot,
-  MapPin,
   Users,
   BarChart3,
 } from "lucide-react";
@@ -14,32 +13,32 @@ const features = [
   {
     icon: LineChart,
     title: "Real-time Dashboards",
-    description: "Monitor all your farm data in real-time with intuitive visualizations",
+    description: "Monitor device telemetry and control status in real time with clear visuals.",
   },
   {
     icon: Bell,
     title: "Alerts & Notifications",
-    description: "Get instant alerts for critical conditions on your mobile device",
+    description: "Get instant alerts for threshold breaches, failures, and runtime anomalies.",
   },
   {
     icon: RefreshCw,
     title: "OTA Firmware Updates",
-    description: "Keep your devices updated with the latest features automatically",
+    description: "Push secure firmware updates to deployed controllers without onsite visits.",
   },
   {
     icon: Bot,
     title: "Device Automation",
-    description: "Create automation rules between devices for seamless operation",
+    description: "Create logic-driven automation flows between sensors, relays, and actuators.",
   },
   {
     icon: Users,
     title: "User Management",
-    description: "Assign roles and permissions to team members securely",
+    description: "Assign role-based access for teams, operators, and maintenance staff.",
   },
   {
     icon: BarChart3,
     title: "Reports & Analytics",
-    description: "Generate detailed reports and insights for better decision making",
+    description: "Generate operational reports for compliance, cost tracking, and optimization.",
   },
 ];
 
@@ -84,13 +83,13 @@ export function FeaturesSection() {
           className="text-center mb-16"
         >
           <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            Platform Features
+            Why Customers Choose Us
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Powerful Cloud Platform
+            Built for Daily Operations
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Our comprehensive cloud and mobile platform for complete farm management
+            We focus on outcomes your team sees every day: fewer failures, faster response, and better control.
           </p>
         </motion.div>
 
