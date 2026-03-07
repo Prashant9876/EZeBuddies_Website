@@ -6,20 +6,20 @@ const steps = [
   {
     number: "01",
     icon: Cpu,
-    title: "Install IoT Sensors",
-    description: "Place our specialized sensors throughout your farm or greenhouse according to your needs.",
+    title: "Consult & Scope",
+    description: "We map your site requirements, control points, and operating constraints.",
   },
   {
     number: "02",
     icon: Wifi,
-    title: "Connect to Network",
-    description: "Connect devices to WiFi or LoRaWAN network for seamless data transmission to the cloud.",
+    title: "Deploy & Configure",
+    description: "Install devices, connect via Wi-Fi/LoRa, and configure automation workflows.",
   },
   {
     number: "03",
     icon: Smartphone,
-    title: "Monitor & Control",
-    description: "Access real-time data and control your farm operations from our mobile app or web dashboard.",
+    title: "Operate & Optimize",
+    description: "Monitor and control operations remotely while continuously improving performance.",
   },
 ];
 
@@ -38,13 +38,13 @@ export function HowItWorksSection() {
           className="text-center mb-16"
         >
           <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            How It Works
+            Customer Journey
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Simple Setup Process
+            From Consultation to Live Automation
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Transform your farm with IoT technology in three easy steps
+            A structured rollout model designed for quick adoption and long-term reliability
           </p>
         </motion.div>
 

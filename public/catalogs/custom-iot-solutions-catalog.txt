@@ -1,0 +1,11 @@
+Custom IoT Solutions - Catalog
+
+Category: Custom Device + Control Engineering
+Use Cases: Site-specific automation and protocol integration projects
+Core Features:
+- Custom hardware and firmware
+- Tailored automation logic
+- Ruggedized design options
+- Deployment, commissioning, and after-sales support
+Connectivity: LoRa, Wi-Fi, RS485, and more
+For consultation, contact: contact@ezebuddies.com

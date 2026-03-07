@@ -1,0 +1,11 @@
+Vatavaran Monitor - Product Catalog
+
+Category: Climate Control Device
+Use Cases: CEA/greenhouse climate, utility rooms, industrial climate zones
+Core Features:
+- Temperature, humidity, and CO2 monitoring
+- Auto actuation for fan and A/C
+- Threshold alerts
+- Remote + local control
+Connectivity: LoRa and Wi-Fi
+For full proposal and pricing, contact: contact@ezebuddies.com

@@ -1,15 +1,15 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
-import { Sprout, Tractor, TreeDeciduous, Waves, Flower, Milk, Egg } from "lucide-react";
+import { Building2, Factory, Landmark, Sprout, Trees, Waves, Warehouse } from "lucide-react";
 
 const industries = [
-  { icon: Sprout, name: "Greenhouses", color: "bg-emerald-500/10", iconColor: "text-emerald-500" },
-  { icon: Tractor, name: "Polyhouses", color: "bg-amber-500/10", iconColor: "text-amber-500" },
-  { icon: TreeDeciduous, name: "Open Farms", color: "bg-green-500/10", iconColor: "text-green-500" },
-  { icon: Waves, name: "Hydroponics", color: "bg-cyan-500/10", iconColor: "text-cyan-500" },
-  { icon: Flower, name: "Nurseries", color: "bg-pink-500/10", iconColor: "text-pink-500" },
-  { icon: Milk, name: "Dairy Farms", color: "bg-blue-500/10", iconColor: "text-blue-500" },
-  { icon: Egg, name: "Poultry", color: "bg-orange-500/10", iconColor: "text-orange-500" },
+  { icon: Sprout, name: "CEA & Greenhouses", color: "bg-emerald-500/10", iconColor: "text-emerald-500" },
+  { icon: Trees, name: "Parks & Landscaping", color: "bg-amber-500/10", iconColor: "text-amber-500" },
+  { icon: Landmark, name: "Stadium Turf", color: "bg-green-500/10", iconColor: "text-green-500" },
+  { icon: Waves, name: "Water Systems", color: "bg-cyan-500/10", iconColor: "text-cyan-500" },
+  { icon: Factory, name: "Industrial Utilities", color: "bg-pink-500/10", iconColor: "text-pink-500" },
+  { icon: Building2, name: "Commercial Buildings", color: "bg-blue-500/10", iconColor: "text-blue-500" },
+  { icon: Warehouse, name: "Warehouses & Campuses", color: "bg-orange-500/10", iconColor: "text-orange-500" },
 ];
 
 export function IndustriesSection() {
@@ -30,10 +30,10 @@ export function IndustriesSection() {
             Industries We Serve
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Solutions for Every Farm
+            Built for Real-world Operations
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Our solutions are tailored for various agricultural applications
+            IoT automation systems designed for agriculture, infrastructure, and utility environments
           </p>
         </motion.div>
 
