@@ -1,22 +1,22 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
-import { Leaf, Lightbulb, Handshake } from "lucide-react";
+import { ShieldCheck, Lightbulb, Handshake } from "lucide-react";
 
 const values = [
   {
-    icon: Leaf,
-    title: "Sustainability",
-    description: "We develop solutions that help farmers use resources more efficiently and reduce environmental impact.",
+    icon: ShieldCheck,
+    title: "Reliability",
+    description: "We engineer robust IoT devices and control systems designed for continuous field operation.",
   },
   {
     icon: Lightbulb,
     title: "Innovation",
-    description: "We continuously research and develop new technologies to address evolving agricultural challenges.",
+    description: "We constantly improve sensing, automation, and connectivity to solve real operational problems.",
   },
   {
     icon: Handshake,
-    title: "Partnership",
-    description: "We work closely with farmers to understand their needs and develop tailored solutions.",
+    title: "Customization",
+    description: "We work closely with customers to design and deploy tailored IoT products around their workflow.",
   },
 ];
 
@@ -41,7 +41,7 @@ export function AboutSection() {
             About EzeBuddies
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Pioneering smart agriculture solutions for a sustainable future
+            IoT automation products built for measurable operational outcomes
           </p>
         </motion.div>
 
@@ -55,14 +55,13 @@ export function AboutSection() {
               Our Mission
             </h3>
             <p className="text-muted-foreground mb-6 leading-relaxed">
-              At EzeBuddies, we're dedicated to transforming traditional farming through 
-              cutting-edge IoT technology. Our mission is to empower farmers with data-driven 
-              insights and automation tools that increase yield, reduce resource consumption, 
-              and make agriculture more sustainable.
+              At EzeBuddies, we design, build, and deploy IoT automation devices for climate,
+              irrigation, and water control. Our mission is to make operations easier by
+              combining accurate sensing, reliable actuation, and clear remote visibility.
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              Founded in 2025, we've grown from a small startup to a leading provider of 
-              smart agriculture solutions, serving farms and greenhouses across multiple countries.
+              We support field agriculture, CEA facilities, parks, stadiums, campuses, and
+              industrial utilities with both standard products and customized IoT solutions.
             </p>
           </motion.div>
 
@@ -76,6 +75,8 @@ export function AboutSection() {
             <img
               src="https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-4.0.3&auto=format&fit=crop&w=1170&q=80"
               alt="Our Team"
+              loading="lazy"
+              decoding="async"
               className="relative rounded-3xl shadow-xl w-full object-cover aspect-video"
             />
           </motion.div>

@@ -1,0 +1,11 @@
+Pump Sathi - Product Catalog
+
+Category: Water Volume + Pump Control
+Use Cases: Tank monitoring, pump set automation, water distribution systems
+Core Features:
+- Level sensing and liter calculation
+- Pump set control
+- Overflow/dry run protection alerts
+- Usage and runtime logs
+Connectivity: LoRa and Wi-Fi
+For full proposal and pricing, contact: contact@ezebuddies.com

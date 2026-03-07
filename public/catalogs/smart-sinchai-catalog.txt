@@ -1,0 +1,11 @@
+Smart Sinchai - Product Catalog
+
+Category: Smart Irrigation Controller
+Use Cases: Field irrigation, parks, stadium turf, landscaping
+Core Features:
+- Zone-wise control
+- Flexible scheduling
+- Runtime tracking
+- Fault alerts and protection logic
+Connectivity: LoRa and Wi-Fi
+For full proposal and pricing, contact: contact@ezebuddies.com

@@ -1,39 +1,44 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
-import { Thermometer, CloudRain, Activity, Zap, Shield, Globe } from "lucide-react";
+import { Users, Target, Wrench, GraduationCap, LifeBuoy, TrendingUp } from "lucide-react";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
 
 const solutions = [
   {
-    icon: Thermometer,
-    title: "Climate Control",
-    description: "Automated temperature and humidity management for optimal growing conditions.",
-    features: ["Smart ventilation", "Heating automation", "Cooling systems"],
+    icon: Users,
+    title: "Consultation & Site Study",
+    description: "We understand your operation, pain points, and control goals before suggesting any setup.",
+    features: ["Use-case mapping", "Site constraints", "Requirement finalization"],
   },
   {
-    icon: CloudRain,
-    title: "Smart Irrigation",
-    description: "Precision watering based on soil moisture and weather data.",
-    features: ["Drip irrigation", "Sprinkler control", "Fertigation"],
+    icon: Target,
+    title: "Solution Blueprint",
+    description: "You receive a clear plan covering device mix, control logic, communication, and rollout steps.",
+    features: ["Device architecture", "Control strategy", "Deployment roadmap"],
   },
   {
-    icon: Activity,
-    title: "Crop Monitoring",
-    description: "Real-time monitoring of plant health and growth metrics.",
-    features: ["NDVI analysis", "Growth tracking", "Disease detection"],
+    icon: Wrench,
+    title: "Deployment & Commissioning",
+    description: "Our team configures thresholds, schedules, and automation rules and validates real operation.",
+    features: ["On-site setup", "Workflow tuning", "Acceptance testing"],
   },
   {
-    icon: Zap,
-    title: "Energy Management",
-    description: "Optimize energy consumption across your farm operations.",
-    features: ["Solar integration", "Load balancing", "Cost analytics"],
+    icon: GraduationCap,
+    title: "Team Training",
+    description: "Operators and managers get practical training to confidently use dashboards and controls.",
+    features: ["Operator training", "Standard SOP guidance", "Escalation playbook"],
   },
   {
-    icon: Globe,
-    title: "Remote Access",
-    description: "Control and monitor your farm from anywhere in the world.",
-    features: ["Mobile app", "Web dashboard"],
+    icon: LifeBuoy,
+    title: "Support & Maintenance",
+    description: "We provide troubleshooting, preventive checks, and upgrade support to keep systems reliable.",
+    features: ["Remote support", "Health checks", "Version upgrades"],
+  },
+  {
+    icon: TrendingUp,
+    title: "Optimization & Scale",
+    description: "After go-live, we help improve efficiency and expand successful deployments across sites.",
+    features: ["Performance reviews", "ROI tracking", "Multi-site scale-up"],
   },
 ];
 
@@ -52,13 +57,13 @@ export function SolutionsSection() {
           className="text-center mb-16"
         >
           <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            Solutions
+            Customer Success
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Complete Farm Solutions
+            How We Work With You
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            End-to-end IoT solutions designed to address every aspect of modern farming
+            A practical delivery model designed to reduce risk, speed up adoption, and maximize outcomes.
           </p>
         </motion.div>
 
@@ -81,9 +86,6 @@ export function SolutionsSection() {
                   <h3 className="font-display text-lg font-semibold text-foreground">
                     {solution.title}
                   </h3>
-                  {solution.title.toLowerCase().includes("crop") && (
-                    <Badge variant="outline">Coming soon</Badge>
-                  )}
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">
                   {solution.description}
@@ -99,7 +101,7 @@ export function SolutionsSection() {
                 </ul>
 
                 <Button variant="ghost" size="sm" className="p-0 h-auto text-primary hover:text-primary/80">
-                  Learn more →
+                  Included in Delivery →
                 </Button>
               </motion.div>
             );

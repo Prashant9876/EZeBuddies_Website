@@ -1,8 +1,15 @@
 import { motion } from "framer-motion";
-import { Leaf, Mail, Phone, MapPin, Facebook, Twitter, Linkedin, Instagram } from "lucide-react";
+import { Mail, Phone, Facebook, Twitter, Linkedin, Instagram } from "lucide-react";
 import logo from "@/assets/devices/logo.png";
 
 export function Footer() {
+  const quickLinks = [
+    { label: "Home", href: "#home" },
+    { label: "Use-cases", href: "#use-cases" },
+    { label: "About Us", href: "#about" },
+    { label: "Solutions", href: "#solutions" },
+  ];
+
   return (
     <footer className="bg-foreground text-background py-16">
       <div className="container mx-auto px-6">
@@ -23,7 +30,7 @@ export function Footer() {
               <span className="font-display font-bold text-xl">EzeBuddies</span>
             </div>
             <p className="text-background/70 mb-6 leading-relaxed">
-              Transforming agriculture with smart IoT solutions for a sustainable future.
+              We help customers automate climate, irrigation, and water operations with dependable IoT devices and tailored engineering support.
             </p>
             <div className="flex gap-4">
               {[Facebook, Twitter, Linkedin, Instagram].map((Icon, index) => (
@@ -47,10 +54,10 @@ export function Footer() {
           >
             <h4 className="font-display font-semibold text-lg mb-6">Quick Links</h4>
             <ul className="space-y-3">
-              {["Home", "About Us", "Solutions"].map((link) => (
-                <li key={link}>
-                  <a href={`#${link.toLowerCase().replace(" ", "")}`} className="text-background/70 hover:text-primary transition-colors">
-                    {link}
+              {quickLinks.map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-background/70 hover:text-primary transition-colors">
+                    {link.label}
                   </a>
                 </li>
               ))}
@@ -66,7 +73,7 @@ export function Footer() {
           >
             <h4 className="font-display font-semibold text-lg mb-6">Products</h4>
             <ul className="space-y-3">
-              {["IRRIVA", "NUTRIVA", "CLIMVA", "FLOWVA", "LUMIVA"].map((product) => (
+              {["Vatavaran Monitor", "Smart Sinchai", "Pump Sathi", "Custom IoT Solutions"].map((product) => (
                 <li key={product}>
                   <a href="#products" className="text-background/70 hover:text-primary transition-colors">
                     {product}

@@ -1,22 +1,27 @@
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { 
   Zap, 
   Thermometer, 
   Droplets, 
-  Sun, 
   AlertTriangle, 
   Gauge, 
   Wind,
   Activity,
   Waves,
-  Lightbulb,
   Timer,
   Shield,
   Check,
   ArrowRight,
-  Cpu
+  Cpu,
+  SlidersHorizontal,
+  FileText,
+  Building2,
+  Smartphone,
+  Wifi,
+  LifeBuoy,
+  Download
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
@@ -25,17 +30,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import irrivaImg from "@/assets/devices/irriva.png";
 import climvaImg from "@/assets/devices/climatecore.jpg";
 import flowvaImg from "@/assets/devices/hydrolevel.png";
-import lumivaImg from "@/assets/devices/lumacontrol.jpg";
-import nutrivaImg from "@/assets/devices/nutriva.png";
+import mainImage from "@/assets/devices/main_image.png";
 
-// Product packages for smart irrigation and fertigation
+// Core device portfolio
 const products = [
   {
     id: "irriva",
-    name: "IRRIVA",
-    tagline: "Smart Motor Controller",
-    subtitle: "Irrigation & Motor Intelligence",
-    description: "Complete motor control package with intelligent monitoring for pumps and irrigation systems. Features Real-time voltage/current tracking, Dry run protection, and anomaly detection for reliable operation.",
+    name: "Smart Sinchai",
+    tagline: "Smart Irrigation Controller",
+    subtitle: "Irrigation Unit Automation",
+    description: "Automates irrigation units for fields, CEA, parks, stadium turf, and landscaping sites. Smart Sinchai provides remote scheduling, runtime control, and protection logic for stable irrigation operations.",
     heroGradient: "from-emerald-500 via-green-500 to-teal-500",
     cardGradient: "from-emerald-500/20 via-green-500/10 to-transparent",
     glowColor: "shadow-emerald-500/30",
@@ -43,59 +47,30 @@ const products = [
     bgPattern: "bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))]",
     icon: Zap,
     image: irrivaImg,
+    catalogUrl: "/catalogs/smart-sinchai-catalog.txt",
     features: [
-      { icon: Activity, label: "Motor ON/OFF Control", desc: "Remote motor switching" },
-      { icon: Gauge, label: "Voltage Monitoring", desc: "Real-time V tracking" },
-      { icon: Zap, label: "Current Consumption", desc: "Ampere measurement" },
-      { icon: AlertTriangle, label: "Dry Run Detection", desc: "Anomaly protection" },
-      { icon: Shield, label: "Overload Protection", desc: "Auto-cutoff safety" },
-      { icon: Timer, label: "Scheduled Operation", desc: "Timer-based control" },
+      { icon: Activity, label: "Zone-wise Control", desc: "Valve and line automation" },
+      { icon: Timer, label: "Flexible Scheduling", desc: "Time and interval logic" },
+      { icon: Gauge, label: "Runtime Tracking", desc: "Usage and cycle history" },
+      { icon: AlertTriangle, label: "Fault Alerts", desc: "Dry run and anomaly alerts" },
+      { icon: Shield, label: "Protection Logic", desc: "Auto cut-off safeguards" },
+      { icon: Cpu, label: "Cloud + Edge", desc: "Reliable remote management" },
     ],
     specs: [
-      "3-Phase & Single Phase Support",
-      "0-440V Voltage Range",
-      "0-80A Current Range", 
-      "LoRa & WiFi Connectivity",
-      "IP65 Weatherproof Rating",
-      "Dry Run Protection",
-      
-    ]
-  },
-  {
-    id: "nutriva",
-    name: "NUTRIVA",
-    tagline: "Smart Fertigation Controller",
-    subtitle: "Precision Nutrition & Irrigation Intelligence",
-    description: "Complete fertigation control package with intelligent nutrient dosing and irrigation management for modern farms and hydroponic systems. Features real-time EC/pH monitoring, automated nutrient mixing, and scheduled fertigation for precise and reliable crop nutrition.",
-    heroGradient: "from-sky-500 via-blue-500 to-indigo-500",
-    cardGradient: "from-sky-500/20 via-blue-500/10 to-transparent",
-    glowColor: "shadow-sky-500/30",
-    accentColor: "text-sky-400",
-    bgPattern: "bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))]",
-    icon: Thermometer,
-    image: nutrivaImg,
-    features: [
-      { icon: Thermometer, label: "Nutrient Dosing Control", desc: "Precise fertilizer injection automation" },
-      { icon: Droplets, label: "EC & pHMonitoring ", desc: "Real-time Tracking" },
-      { icon: Wind, label: "Scheduled Fertigation", desc: "Timer & stage-based nutrient delivery" },
-      { icon: Activity, label: "Remote Control", desc: "Cloud-based monitoring & control" },
-      { icon: AlertTriangle, label: "Anomaly Detection", desc: "Custom notifications" },
-      { icon: Cpu, label: "Edge Computing", desc: "Local processing" },
-    ],
-    specs: [
-      "Single & Multi-channel Dosing Support",
-      "EC Range: 0–3 mS/cm",
-      "pH Range: 0–14",
-      "LoRa & WiFi Connectivity",
-      "Manual & Automatic Operation Modes"
+      "Single and multi-zone deployments",
+      "LoRa and Wi-Fi connectivity",
+      "Remote on/off and scheduling",
+      "Event and fault log history",
+      "IP-rated outdoor enclosures",
+      "Works with field and landscape systems",
     ]
   },
   {
     id: "climva",
-    name: "CLIMVA",
-    tagline: "Climate Intelligence Hub",
-    subtitle: "Temperature • Humidity • CO₂",
-    description: "Advanced environmental monitoring package for greenhouses and controlled environments. Precision sensors deliver real-time climate data for optimal growing conditions.",
+    name: "Vatavaran Monitor",
+    tagline: "Climate Control Device",
+    subtitle: "Temp • Humidity • CO2 + Actuation",
+    description: "Measures temperature, humidity, and CO2 in real time, then controls fans, A/C units, and other climate controllers based on configured thresholds and schedules.",
     heroGradient: "from-sky-500 via-blue-500 to-indigo-500",
     cardGradient: "from-sky-500/20 via-blue-500/10 to-transparent",
     glowColor: "shadow-sky-500/30",
@@ -103,28 +78,29 @@ const products = [
     bgPattern: "bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))]",
     icon: Thermometer,
     image: climvaImg,
+    catalogUrl: "/catalogs/vatavaran-monitor-catalog.txt",
     features: [
-      { icon: Thermometer, label: "Temperature Sensing", desc: "-40°C to 80°C range" },
-      { icon: Droplets, label: "Humidity Monitoring", desc: "0-100% RH accuracy" },
-      { icon: Wind, label: "CO₂ Concentration", desc: "0-5000ppm detection" },
-      { icon: Activity, label: "Real-time Streaming", desc: "10-Minute intervals" },
-      { icon: AlertTriangle, label: "Threshold Alerts", desc: "Custom notifications" },
-      { icon: Cpu, label: "Edge Computing", desc: "Local processing" },
+      { icon: Thermometer, label: "Temperature Sensing", desc: "Continuous monitoring" },
+      { icon: Droplets, label: "Humidity Tracking", desc: "Accurate RH analytics" },
+      { icon: Wind, label: "CO2 Monitoring", desc: "Real-time ppm visibility" },
+      { icon: Activity, label: "Auto Actuation", desc: "Fan and A/C control logic" },
+      { icon: AlertTriangle, label: "Threshold Alerts", desc: "Instant abnormal alerts" },
+      { icon: Cpu, label: "Remote + Local Control", desc: "Cloud and edge modes" },
     ],
     specs: [
-      "±0.2°C Temperature Accuracy",
-      "±2% Humidity Accuracy",
-      "NDIR CO₂ Sensor Technology",
-      "LoRa & WiFi Connectivity",
-      "5-Year Sensor Lifespan"
+      "Temperature, humidity, and CO2 telemetry",
+      "Fan and A/C relay/controller outputs",
+      "Custom threshold and schedule logic",
+      "LoRa and Wi-Fi connectivity",
+      "Dashboard and mobile alerts",
     ]
   },
   {
     id: "flowva",
-    name: "FLOWVA",
-    tagline: "Tank & Flow Automation",
-    subtitle: "Water Level • Flow Control",
-    description: "Intelligent water management system for tanks and reservoirs. Ultrasonic level sensing combined with automated pump control for efficient water distribution.",
+    name: "Pump Sathi",
+    tagline: "Water Volume + Pump Control",
+    subtitle: "Liter Measurement & Automation",
+    description: "Measures water volume in liters and automates pump sets with tank-level logic. Pump Sathi helps reduce overflow, dry run risk, and manual switching effort.",
     heroGradient: "from-cyan-500 via-teal-500 to-emerald-500",
     cardGradient: "from-cyan-500/20 via-teal-500/10 to-transparent",
     glowColor: "shadow-cyan-500/30",
@@ -132,65 +108,93 @@ const products = [
     bgPattern: "bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))]",
     icon: Waves,
     image: flowvaImg,
+    catalogUrl: "/catalogs/pump-sathi-catalog.txt",
     features: [
-      { icon: Waves, label: "Water Level Sensing", desc: "Ultrasonic precision" },
-      { icon: Gauge, label: "Volume Calculation", desc: "Liters/gallons display" },
-    
-      { icon: Zap, label: "Pump Automation", desc: "Auto fill/drain" },
-      { icon: AlertTriangle, label: "Overflow Protection", desc: "Smart cutoffs" },
+      { icon: Waves, label: "Level Sensing", desc: "Continuous tank tracking" },
+      { icon: Gauge, label: "Liter Calculation", desc: "Live volume estimation" },
+      { icon: Zap, label: "Pump Set Control", desc: "Auto fill and refill cycles" },
+      { icon: AlertTriangle, label: "Protection Alerts", desc: "Overflow and dry run alerts" },
+      { icon: Shield, label: "Safety Interlocks", desc: "Pump protection controls" },
+      { icon: Activity, label: "Usage Logs", desc: "Consumption and runtime trends" },
     ],
     specs: [
-      "0.5-6m Detection Range",
-      "±3 cm Level Accuracy",
-      "LoRa & WiFi Connectivity",
-      "IP68 Submersible Option",
+      "Tank level to liter conversion",
+      "Pump ON/OFF automation outputs",
+      "Configurable high/low thresholds",
+      "LoRa and Wi-Fi connectivity",
+      "Industrial and outdoor deployments",
     ]
   },
   {
-    id: "lumiva",
-    name: "LUMIVA",
-    tagline: "Hydroponics Light Control",
-    subtitle: "Grow Light • Photoperiod • DLI",
-    description: "Precision lighting controller designed for hydroponics and vertical farming. Intelligent spectrum management and photoperiod scheduling for maximum crop yield.",
-    heroGradient: "from-violet-500 via-purple-500 to-fuchsia-500",
-    cardGradient: "from-violet-500/20 via-purple-500/10 to-transparent",
-    glowColor: "shadow-violet-500/30",
-    accentColor: "text-violet-400",
+    id: "customva",
+    name: "CUSTOM IOT SOLUTIONS",
+    tagline: "Built to Your Requirement",
+    subtitle: "Custom Device + Control Engineering",
+    description: "Need something specific? We design customized IoT products and automation panels for your use-case, communication protocol, and control sequence.",
+    heroGradient: "from-orange-500 via-amber-500 to-yellow-500",
+    cardGradient: "from-orange-500/20 via-amber-500/10 to-transparent",
+    glowColor: "shadow-orange-500/30",
+    accentColor: "text-orange-400",
     bgPattern: "bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))]",
-    icon: Sun,
-    image: lumivaImg,
+    icon: SlidersHorizontal,
+    image: mainImage,
+    catalogUrl: "/catalogs/custom-iot-solutions-catalog.txt",
     features: [
-      { icon: Sun, label: "Lux Measurement", desc: "0-200,000 lux range" },
-      { icon: Lightbulb, label: "Grow Light Control", desc: "PWM dimming" },
-      { icon: Timer, label: "Photoperiod Scheduling", desc: "Sunrise/sunset" },
-      { icon: Activity, label: "DLI Calculation", desc: "Daily light integral" },
-      { icon: Gauge, label: "Spectrum Analysis", desc: "PAR monitoring" },
-      { icon: Cpu, label: "Zone Management", desc: "Multi-rack support" },
+      { icon: Cpu, label: "Custom Hardware", desc: "Sensor and controller integration" },
+      { icon: SlidersHorizontal, label: "Tailored Logic", desc: "Business-specific workflows" },
+      { icon: Activity, label: "Protocol Support", desc: "LoRa, Wi-Fi, RS485 and more" },
+      { icon: Shield, label: "Ruggedized Design", desc: "Field-ready enclosures" },
+      { icon: Timer, label: "Commissioning Support", desc: "Deployment and handover" },
+      { icon: AlertTriangle, label: "After-sales Support", desc: "Maintenance and upgrades" },
     ],
     specs: [
-      "0-10V & PWM Dimming",
-      "Up to 16 Light Zones",
-      "PAR Sensor Integration",
-      "Sunrise/Sunset Simulation",
-      "DMX512 Protocol Support",
-      "Energy Usage Analytics"
+      "Requirement-driven architecture",
+      "Flexible I/O and relay expansion",
+      "Sensor fusion and control loops",
+      "Dashboard and alert customization",
+      "Pilot to scale rollout model",
     ]
   }
 ];
 
 type ProductType = typeof products[0];
 
+const productUseCases: Record<string, string[]> = {
+  irriva: ["Field irrigation lines", "Parks and landscaping zones", "Stadium turf schedules"],
+  climva: ["CEA and greenhouse climate", "HVAC monitoring zones", "Controlled utility rooms"],
+  flowva: ["Tank and sump monitoring", "Pump set automation", "Water distribution points"],
+  customva: ["Site-specific process control", "Protocol integration projects", "Custom panel deployments"],
+};
+
 function ProductDetailDialog({ 
   product, 
   open, 
-  onOpenChange 
+  onOpenChange,
+  initialSection
 }: { 
   product: ProductType | null; 
   open: boolean; 
-  onOpenChange: (open: boolean) => void 
+  onOpenChange: (open: boolean) => void;
+  initialSection: "overview" | "specs";
 }) {
   if (!product) return null;
   const Icon = product.icon;
+  const specsRef = useRef<HTMLDivElement | null>(null);
+  const useCases = productUseCases[product.id] ?? ["Custom deployment"];
+  const snapshotCards = [
+    { icon: Building2, label: "Deployment Type", value: product.subtitle },
+    { icon: Wifi, label: "Connectivity", value: "LoRa + Wi-Fi" },
+    { icon: Smartphone, label: "Remote Access", value: "Mobile + Web Dashboard" },
+  ];
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialSection !== "specs") return;
+    const timer = setTimeout(() => {
+      specsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [open, initialSection, product?.id]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -238,6 +242,8 @@ function ProductDetailDialog({
                 <img 
                   src={product.image} 
                   alt={product.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-48 md:h-64 object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
@@ -258,8 +264,29 @@ function ProductDetailDialog({
           <DialogDescription className="sr-only">
             {product.description}
           </DialogDescription>
-          
-          {/* Features Grid */}
+
+          {/* Snapshot Cards */}
+          <div className="grid md:grid-cols-3 gap-3">
+            {snapshotCards.map((card) => {
+              const SnapshotIcon = card.icon;
+              return (
+                <div
+                  key={card.label}
+                  className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-r ${product.heroGradient} flex items-center justify-center`}>
+                      <SnapshotIcon className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">{card.label}</span>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">{card.value}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Capability Cards */}
           <div>
             <h4 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`} />
@@ -274,45 +301,78 @@ function ProductDetailDialog({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    className="p-3 rounded-xl bg-muted/50 border border-border/50 hover:border-primary/30 transition-colors group"
+                    className="p-4 rounded-2xl bg-muted/40 border border-border/60 hover:border-primary/40 transition-colors group"
                   >
-                    <FeatureIcon className={`w-5 h-5 ${product.accentColor} mb-2 group-hover:scale-110 transition-transform`} />
-                    <span className="text-sm font-medium text-foreground block">{feature.label}</span>
-                    <span className="text-xs text-muted-foreground">{feature.desc}</span>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`w-9 h-9 rounded-xl bg-gradient-to-r ${product.heroGradient} flex items-center justify-center`}>
+                        <FeatureIcon className="w-4 h-4 text-white" />
+                      </div>
+                      <span className={`text-[10px] font-semibold uppercase tracking-wide ${product.accentColor}`}>
+                        Capability
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold text-foreground block mb-1">{feature.label}</span>
+                    <span className="text-xs text-muted-foreground leading-relaxed">{feature.desc}</span>
                   </motion.div>
                 );
               })}
             </div>
           </div>
 
-          {/* Technical Specs */}
-          <div>
+          {/* Specs Cards */}
+          <div ref={specsRef}>
             <h4 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`} />
               Technical Specifications
             </h4>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid md:grid-cols-2 gap-3">
               {product.specs.map((spec, i) => (
                 <motion.div 
                   key={i}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.03 }}
-                  className="flex items-center gap-2 p-2 rounded-lg"
+                  className="flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-card"
                 >
-                  <Check className={`w-4 h-4 ${product.accentColor} shrink-0`} />
-                  <span className="text-sm text-foreground">{spec}</span>
+                  <div className={`w-7 h-7 rounded-full bg-gradient-to-r ${product.heroGradient} flex items-center justify-center shrink-0`}>
+                    <Check className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-sm text-foreground leading-relaxed">{spec}</span>
                 </motion.div>
               ))}
             </div>
           </div>
-          
+
+          {/* Best-fit Use Cases */}
+          <div>
+            <h4 className="font-semibold text-foreground flex items-center gap-2 mb-4">
+              <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`} />
+              Best-fit Use Cases
+            </h4>
+            <div className="grid md:grid-cols-3 gap-3">
+              {useCases.map((item, i) => (
+                <motion.div
+                  key={item}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  className="rounded-xl border border-border/60 bg-muted/40 p-3"
+                >
+                  <p className="text-sm text-foreground">{item}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
           {/* CTA */}
           <div className="pt-4 border-t border-border flex gap-3">
             <Button className={`flex-1 bg-gradient-to-r ${product.heroGradient} text-white hover:opacity-90`}>
               Request Quote
             </Button>
-            
+            <Button variant="outline" className="border-border/70">
+              <LifeBuoy className="w-4 h-4" />
+              Talk to Expert
+            </Button>
           </div>
         </div>
       </DialogContent>
@@ -327,7 +387,7 @@ function ProductCard({
 }: { 
   product: ProductType; 
   index: number; 
-  onViewDetails: (product: ProductType) => void 
+  onViewDetails: (product: ProductType, section: "overview" | "specs") => void 
 }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
@@ -344,92 +404,93 @@ function ProductCard({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Glow Effect */}
-      <motion.div 
+      <motion.div
         className={`absolute -inset-1 rounded-3xl bg-gradient-to-r ${product.heroGradient} opacity-0 blur-xl transition-opacity duration-500`}
         animate={{ opacity: isHovered ? 0.3 : 0 }}
       />
-      
-      <div className={`relative bg-card rounded-2xl overflow-hidden border border-border/50 hover:border-primary/30 transition-all duration-500 ${product.glowColor} hover:shadow-2xl`}>
-        {/* Header with Product Image */}
-        <div className={`relative h-48 overflow-hidden`}>
-          {/* Product Image */}
-          <img 
-            src={product.image} 
+
+      <div className="relative rounded-3xl overflow-hidden border border-border/60 bg-card shadow-sm hover:shadow-2xl transition-all duration-500">
+        <div className="relative h-52 overflow-hidden">
+          <img
+            src={product.image}
             alt={product.name}
-            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
-          
-          {/* Gradient overlay */}
-          <div className={`absolute inset-0 bg-gradient-to-t ${product.cardGradient} opacity-90`} />
-          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
-          
-          {/* Floating particles */}
-          <motion.div
-            animate={{ y: [0, -10, 0], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 3, repeat: Infinity }}
-            className={`absolute top-6 right-6 w-3 h-3 rounded-full bg-gradient-to-r ${product.heroGradient}`}
-          />
-          <motion.div
-            animate={{ y: [0, 10, 0], opacity: [0.2, 0.5, 0.2] }}
-            transition={{ duration: 4, repeat: Infinity, delay: 0.5 }}
-            className={`absolute top-16 right-16 w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`}
-          />
-          
-          {/* Icon and Title */}
-          <motion.div 
-            className="absolute bottom-4 left-6 right-6 flex items-center gap-4"
-            animate={isHovered ? { scale: 1.02 } : { scale: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${product.heroGradient} flex items-center justify-center shadow-lg shrink-0`}>
-              <Icon className="w-7 h-7 text-white" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-900/35 to-transparent" />
+          <div className={`absolute inset-0 bg-gradient-to-br ${product.cardGradient} opacity-30`} />
+
+          <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
+            <span className="text-[10px] tracking-wide uppercase font-semibold px-3 py-1 rounded-full bg-white/85 text-slate-800 border border-white/80">
+              Ready to Deploy
+            </span>
+            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${product.heroGradient} flex items-center justify-center shadow-lg`}>
+              <Icon className="w-5 h-5 text-white" />
             </div>
+          </div>
+
+          <motion.div
+            className="absolute left-5 right-5 bottom-4"
+            animate={isHovered ? { y: -2 } : { y: 0 }}
+          >
             <div>
-              <h3 className="font-display text-2xl font-bold text-foreground tracking-tight">
+              <h3 className="font-display text-2xl font-bold text-white leading-tight">
                 {product.name}
               </h3>
-              <span className={`text-xs font-semibold ${product.accentColor} uppercase tracking-wider`}>
+              <span className="text-xs font-semibold text-white/85 uppercase tracking-wider">
                 {product.tagline}
               </span>
             </div>
           </motion.div>
         </div>
 
-        {/* Content */}
-        <div className="p-6 pt-4">
-          <p className="text-sm text-muted-foreground mb-5 line-clamp-2">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ideal for</span>
+            <span className={`text-xs font-semibold ${product.accentColor}`}>{product.subtitle}</span>
+          </div>
+
+          <p className="text-sm text-muted-foreground mb-5 line-clamp-3">
             {product.description}
           </p>
 
-          {/* Features pills */}
-          <div className="flex flex-wrap gap-2 mb-5">
-            {product.features.slice(0, 4).map((feature, i) => (
-              <motion.span
+          <div className="grid grid-cols-1 gap-2 mb-5">
+            {product.features.slice(0, 3).map((feature, i) => (
+              <motion.div
                 key={i}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={isInView ? { opacity: 1, scale: 1 } : {}}
                 transition={{ delay: index * 0.1 + i * 0.05 + 0.3 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 text-xs font-medium text-foreground border border-border/50"
+                className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/50 px-3 py-2"
               >
-                <feature.icon className={`w-3 h-3 ${product.accentColor}`} />
-                {feature.label}
-              </motion.span>
+                <Check className={`w-4 h-4 shrink-0 ${product.accentColor}`} />
+                <span className="text-xs font-medium text-foreground">{feature.label}</span>
+              </motion.div>
             ))}
           </div>
 
-          <Button 
-            className={`w-full bg-gradient-to-r ${product.heroGradient} text-white hover:opacity-90 transition-opacity group/btn`}
-            onClick={() => onViewDetails(product)}
-          >
-            <span>Explore {product.name}</span>
-            <motion.span 
-              className="ml-2"
-              animate={isHovered ? { x: 4 } : { x: 0 }}
+          <div className="flex gap-3">
+            <Button
+              className={`flex-1 h-11 rounded-xl bg-gradient-to-r ${product.heroGradient} text-white hover:opacity-90 transition-opacity group/btn shadow-md`}
+              onClick={() => onViewDetails(product, "overview")}
             >
-              <ArrowRight className="w-4 h-4" />
-            </motion.span>
-          </Button>
+              <span>View Details</span>
+              <motion.span className="ml-2" animate={isHovered ? { x: 4 } : { x: 0 }}>
+                <ArrowRight className="w-4 h-4" />
+              </motion.span>
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-11 rounded-xl border border-border/70 bg-muted/70 hover:bg-muted text-foreground"
+              asChild
+            >
+              <a href={product.catalogUrl} download>
+                <Download className="w-4 h-4" />
+                Download Catalog
+              </a>
+            </Button>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -441,9 +502,11 @@ export function ProductsSection() {
   const isHeaderInView = useInView(headerRef, { once: true });
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogSection, setDialogSection] = useState<"overview" | "specs">("overview");
 
-  const handleViewDetails = (product: ProductType) => {
+  const handleViewDetails = (product: ProductType, section: "overview" | "specs") => {
     setSelectedProduct(product);
+    setDialogSection(section);
     setDialogOpen(true);
   };
 
@@ -468,18 +531,18 @@ export function ProductsSection() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6"
           >
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="text-sm font-semibold text-primary">IntelliControl</span>
+            <span className="text-sm font-semibold text-primary">Products You Can Deploy Today</span>
           </motion.div>
           
           <h2 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
             <span className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 bg-clip-text text-transparent">
-              Intelligent
+              Production-ready
             </span>{" "}
-            Control Systems
+            IoT Device Portfolio
           </h2>
           <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            Four integrated product packages designed for modern agriculture. From motor control to climate monitoring, 
-            water management to lighting automation — everything you need for precision farming.
+            Deploy Vatavaran Monitor, Smart Sinchai, and Pump Sathi for rapid automation gains, or request a custom build
+            tailored to your workflow, site conditions, and control architecture.
           </p>
         </motion.div>
 
@@ -508,7 +571,8 @@ export function ProductsSection() {
       <ProductDetailDialog 
         product={selectedProduct} 
         open={dialogOpen} 
-        onOpenChange={setDialogOpen} 
+        onOpenChange={setDialogOpen}
+        initialSection={dialogSection}
       />
     </section>
   );
