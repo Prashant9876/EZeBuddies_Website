@@ -47,7 +47,7 @@ const products = [
     bgPattern: "bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))]",
     icon: Zap,
     image: irrivaImg,
-    catalogUrl: "/catalogs/smart-sinchai-catalog.txt",
+    catalogUrl: "/catalogs/smart-sinchai-catalog.png",
     features: [
       { icon: Activity, label: "Zone-wise Control", desc: "Valve and line automation" },
       { icon: Timer, label: "Flexible Scheduling", desc: "Time and interval logic" },
@@ -78,7 +78,7 @@ const products = [
     bgPattern: "bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))]",
     icon: Thermometer,
     image: climvaImg,
-    catalogUrl: "/catalogs/vatavaran-monitor-catalog.txt",
+    catalogUrl: "/catalogs/vatavaran-monitor-catalog.png",
     features: [
       { icon: Thermometer, label: "Temperature Sensing", desc: "Continuous monitoring" },
       { icon: Droplets, label: "Humidity Tracking", desc: "Accurate RH analytics" },
@@ -108,7 +108,7 @@ const products = [
     bgPattern: "bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))]",
     icon: Waves,
     image: flowvaImg,
-    catalogUrl: "/catalogs/pump-sathi-catalog.txt",
+    catalogUrl: "/catalogs/pump-sathi-catalog.png",
     features: [
       { icon: Waves, label: "Level Sensing", desc: "Continuous tank tracking" },
       { icon: Gauge, label: "Liter Calculation", desc: "Live volume estimation" },
@@ -366,13 +366,13 @@ function ProductDetailDialog({
 
           {/* CTA */}
           <div className="pt-4 border-t border-border flex gap-3">
-            <Button className={`flex-1 bg-gradient-to-r ${product.heroGradient} text-white hover:opacity-90`}>
+            {/* <Button className={`flex-1 bg-gradient-to-r ${product.heroGradient} text-white hover:opacity-90`}>
               Request Quote
             </Button>
             <Button variant="outline" className="border-border/70">
               <LifeBuoy className="w-4 h-4" />
               Talk to Expert
-            </Button>
+            </Button> */}
           </div>
         </div>
       </DialogContent>
