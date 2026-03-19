@@ -2,6 +2,12 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { Button } from "./ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import { saveAuthFromLogin } from "@/lib/auth";
 import logoImg from "@/assets/devices/logo.png";
 
 const navLinks = [
@@ -13,8 +19,75 @@ const navLinks = [
 ];
 
 export function Header() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoginSubmitting(true);
+
+    const loginApiUrl = import.meta.env.VITE_LOGIN_API_URL;
+    if (!loginApiUrl) {
+      toast({
+        title: "Login API not configured",
+        description: "Set VITE_LOGIN_API_URL in your environment file.",
+        variant: "destructive",
+      });
+      setIsLoginSubmitting(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(loginApiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: username,
+          password,
+        }),
+      });
+
+      let responseData: unknown = null;
+      try {
+        responseData = await response.json();
+      } catch {
+        responseData = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          typeof responseData === "object" && responseData !== null
+            ? JSON.stringify(responseData)
+            : `Login failed with status ${response.status}`,
+        );
+      }
+
+      const safeResponse = (responseData ?? {}) as Record<string, unknown>;
+      saveAuthFromLogin(safeResponse);
+      setPassword("");
+      setLoginOpen(false);
+      navigate("/dashboard");
+      toast({
+        title: "Login successful",
+        description: "Welcome. Redirecting to dashboard.",
+      });
+    } catch (error) {
+      console.error("Login failed:", error);
+      toast({
+        title: "Login failed",
+        description: "Please check username/password and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoginSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -81,11 +154,9 @@ export function Header() {
                 Talk to Sales
               </a>
             </Button>
-            {/* <a href="" target="_blank" rel="noopener noreferrer" className="inline-block">
-              <Button variant="hero" size="lg">
-                Login
-              </Button>
-            </a> */}
+            <Button variant="hero" size="lg" onClick={() => setLoginOpen(true)}>
+              Login
+            </Button>
           </div>
 
           {/* Mobile Menu Button */}
@@ -132,11 +203,52 @@ export function Header() {
                     Talk to Sales
                   </a>
                 </Button>
+                <Button variant="hero" size="lg" onClick={() => setLoginOpen(true)}>
+                  Login
+                </Button>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Login</DialogTitle>
+            <DialogDescription>Enter your username and password.</DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={handleLoginSubmit}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="login-username">Username</Label>
+              <Input
+                id="login-username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter username"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="login-password">Password</Label>
+              <Input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoginSubmitting}>
+              {isLoginSubmitting ? "Signing In..." : "Sign In"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </motion.header>
   );
 }

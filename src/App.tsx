@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import VatavaranPreLaunch from "./pages/VatavaranPreLaunch";
+import LoginDashboard from "./pages/LoginDashboard";
 
 const queryClient = new QueryClient();
 
@@ -16,6 +18,9 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/pre-launch/vatavaran-monitor" element={<VatavaranPreLaunch />} />
+          <Route path="/vatavaran-monitor-prelaunch" element={<VatavaranPreLaunch />} />
+          <Route path="/dashboard" element={<LoginDashboard />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

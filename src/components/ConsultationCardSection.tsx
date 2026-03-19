@@ -7,13 +7,19 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { submitCustomerData } from "@/lib/customerDataApi";
 
 interface ConsultationCardSectionProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  requestFor?: string;
 }
 
-export function ConsultationCardSection({ open, onOpenChange }: ConsultationCardSectionProps) {
+export function ConsultationCardSection({
+  open,
+  onOpenChange,
+  requestFor = "CONSULTATION_REQUEST",
+}: ConsultationCardSectionProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -43,7 +49,17 @@ export function ConsultationCardSection({ open, onOpenChange }: ConsultationCard
     };
 
     try {
-      await emailjs.send(serviceId, templateId, templateParams, publicKey);
+      await submitCustomerData({
+        ...formData,
+        Request_For: requestFor,
+      });
+
+      try {
+        await emailjs.send(serviceId, templateId, templateParams, publicKey);
+      } catch (emailError) {
+        console.error("Consultation email failed:", emailError);
+      }
+
       toast({
         title: "Consultation Request Sent",
         description: "Our team will contact you shortly.",

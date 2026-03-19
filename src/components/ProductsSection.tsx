@@ -177,24 +177,26 @@ function ProductDetailDialog({
   onOpenChange: (open: boolean) => void;
   initialSection: "overview" | "specs";
 }) {
+  const specsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!product) return;
+    if (initialSection !== "specs") return;
+    const timer = setTimeout(() => {
+      specsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [open, initialSection, product]);
+
   if (!product) return null;
   const Icon = product.icon;
-  const specsRef = useRef<HTMLDivElement | null>(null);
   const useCases = productUseCases[product.id] ?? ["Custom deployment"];
   const snapshotCards = [
     { icon: Building2, label: "Deployment Type", value: product.subtitle },
     { icon: Wifi, label: "Connectivity", value: "LoRa + Wi-Fi" },
     { icon: Smartphone, label: "Remote Access", value: "Mobile + Web Dashboard" },
   ];
-
-  useEffect(() => {
-    if (!open) return;
-    if (initialSection !== "specs") return;
-    const timer = setTimeout(() => {
-      specsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 120);
-    return () => clearTimeout(timer);
-  }, [open, initialSection, product?.id]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
