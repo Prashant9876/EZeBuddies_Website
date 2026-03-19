@@ -1,12 +1,8 @@
 export async function submitCustomerData(payload: Record<string, unknown>) {
-  const customerDataEndpoint = import.meta.env.VITE_CUSTOMER_DATA_API_PROXY_URL;
+  const customerDataEndpoint = import.meta.env.VITE_CUSTOMER_DATA_API_PROXY_URL || "/api/customer-data";
 
-  if (!customerDataEndpoint) {
-    throw new Error("Missing VITE_CUSTOMER_DATA_API_PROXY_URL in environment variables.");
-  }
-
-  if (/[?&]code=/i.test(customerDataEndpoint)) {
-    throw new Error("Do not expose function keys in client URLs. Use a secure backend proxy URL.");
+  if (/^https?:\/\//i.test(customerDataEndpoint) && /[?&]code=/i.test(customerDataEndpoint)) {
+    throw new Error("Do not expose function keys in client URLs. Use a secure proxy URL.");
   }
 
   const response = await fetch(customerDataEndpoint, {
