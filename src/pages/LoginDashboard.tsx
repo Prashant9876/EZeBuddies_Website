@@ -372,10 +372,6 @@ export default function LoginDashboard() {
                   <p className="text-2xl font-semibold text-violet-900">{devices.length}</p>
                 </div>
                 <div className="space-y-2">
-                  <Button variant="outline" className="w-full" onClick={refreshRealtimeData}>
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                    {isRefreshing ? "Refreshing..." : "Refresh Now"}
-                  </Button>
                   <Button variant="destructive" className="w-full" onClick={handleLogout}>
                     Logout
                   </Button>
@@ -400,9 +396,15 @@ export default function LoginDashboard() {
               </Button>
               <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">After Login Dashboard</h1>
             </div>
-            <Button variant="destructive" onClick={handleLogout}>
-              Logout
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={refreshRealtimeData}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                {isRefreshing ? "Refreshing..." : "Refresh Now"}
+              </Button>
+              <Button variant="destructive" onClick={handleLogout}>
+                Logout
+              </Button>
+            </div>
           </div>
 
           <Card>
