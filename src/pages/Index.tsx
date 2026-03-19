@@ -15,6 +15,7 @@ import { StickyMobileCta } from "@/components/StickyMobileCta";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Rocket } from "lucide-react";
+import vatavaranPreLaunchGraphic from "@/assets/devices/prelauch.png";
 
 const Index = () => {
   const [preLaunchOpen, setPreLaunchOpen] = useState(false);
@@ -51,7 +52,7 @@ const Index = () => {
         <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden">
           <div className="relative">
             <img
-              src="/catalogs/vatavaran-monitor-catalog.png"
+              src={vatavaranPreLaunchGraphic}
               alt="Vatavaran Monitor pre launch"
               className="w-full h-[300px] md:h-[380px] object-cover"
             />

@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DemoRequestDialog } from "@/components/DemoRequestDialog";
+import vatavaranPreLaunchGraphic from "@/assets/devices/Vatavaran device pre-launch graphic.png";
 
 type UseCase = {
   label: string;
@@ -238,7 +239,7 @@ export default function VatavaranPreLaunch() {
                 Launching Soon
               </div>
               <img
-                src="/catalogs/vatavaran-monitor-catalog.png"
+                src={vatavaranPreLaunchGraphic}
                 alt="Vatavaran Monitor launch visual"
                 className="h-full w-full rounded-[1.1rem] object-cover"
                 loading="eager"
@@ -308,7 +309,7 @@ export default function VatavaranPreLaunch() {
                         loading="lazy"
                         decoding="async"
                         onError={(e) => {
-                          e.currentTarget.src = "/catalogs/vatavaran-monitor-catalog.png";
+                          e.currentTarget.src = vatavaranPreLaunchGraphic;
                         }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-[#032d4a]/75 via-[#0a4f77]/30 to-transparent" />

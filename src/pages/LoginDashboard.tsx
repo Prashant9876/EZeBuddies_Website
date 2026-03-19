@@ -394,7 +394,7 @@ export default function LoginDashboard() {
               <Button variant="outline" size="icon" onClick={() => setIsNavOpen(true)} aria-label="Open navigation panel">
                 <Menu className="h-5 w-5" />
               </Button>
-              <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">After Login Dashboard</h1>
+              <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">ezeGreen Dashboard</h1>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={refreshRealtimeData}>
@@ -409,8 +409,8 @@ export default function LoginDashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Device Quantities by Name</CardTitle>
-              <CardDescription>Grouped using <code>device_name</code> and counted across all devices.</CardDescription>
+              <CardTitle>Device Summary</CardTitle>
+              <CardDescription>Device distribution based on device name</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
               {Object.entries(quantityByName).length === 0 && (
@@ -418,7 +418,7 @@ export default function LoginDashboard() {
               )}
               {Object.entries(quantityByName).map(([name, count]) => (
                 <div key={name} className="rounded-xl border border-border bg-muted/30 p-3">
-                  <p className="text-sm text-muted-foreground">Device Name</p>
+                  <p className="text-sm text-muted-foreground"></p>
                   <p className="font-semibold text-foreground">{name}</p>
                   <p className="mt-1 text-sm">
                     Quantity: <span className="font-semibold">{count}</span>
