@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Send, User, Mail, Phone, MapPin, Cpu } from "lucide-react";
 import { Button } from "./ui/button";
@@ -21,10 +21,12 @@ import {
 } from "./ui/select";
 import { useToast } from "@/hooks/use-toast";
 import emailjs from '@emailjs/browser';
+import { submitCustomerData } from "@/lib/customerDataApi";
 
 interface DemoRequestDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  requestFor?: string;
 }
 
 const siteTypes = [
@@ -45,9 +47,12 @@ const deploymentSizes = [
   "Large enterprise rollout",
 ];
 
-export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps) {
+export function DemoRequestDialog({
+  open,
+  onOpenChange,
+  requestFor = "DEMO_REQUEST",
+}: DemoRequestDialogProps) {
   const { toast } = useToast();
-  const form = useRef();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -80,8 +85,18 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
     }
 
 
-    emailjs.send(serviceId,templateId,templateParams,publicKey).then((Response) => {
-      console.log('SUCCESS!', Response.status, Response.text);
+    try {
+      await submitCustomerData({
+        ...formData,
+        Request_For: requestFor,
+      });
+
+      try {
+        await emailjs.send(serviceId, templateId, templateParams, publicKey);
+      } catch (emailError) {
+        console.error("Demo request email failed:", emailError);
+      }
+
       toast({
         title: "Demo Request Sent",
         description: "Thank you for your interest! We will get back to you soon.",
@@ -97,16 +112,15 @@ export function DemoRequestDialog({ open, onOpenChange }: DemoRequestDialogProps
         message: "",
       });
       setIsSubmitting(false);
-    })
-      .catch((error) => {
-        console.error('ERROR...', error);
-        toast({
-          title: "Error",
-          description: "Something went wrong. Please try again later.",
-          variant: "destructive",
-        });
-        setIsSubmitting(false);
-      })
+    } catch (error) {
+      console.error("Demo request failed:", error);
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again later.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+    }
   };
 
   return (

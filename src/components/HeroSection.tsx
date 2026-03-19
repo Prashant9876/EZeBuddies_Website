@@ -7,21 +7,21 @@ import { DemoRequestDialog } from "./DemoRequestDialog";
 import { ConsultationCardSection } from "./ConsultationCardSection";
 import mainImage from "@/assets/devices/main_image.png";
 
+const sensorCards = [
+  { icon: "🌡️", label: "Temperature", value: "26.1°C", bg: "bg-primary/20" },
+  { icon: "💧", label: "Humidity", value: "61%", bg: "bg-blue-400/20" },
+  { icon: "🫧", label: "CO2", value: "812 ppm", bg: "bg-cyan-400/20" },
+  { icon: "🌀", label: "Fan", value: "ON", bg: "bg-green-500/20" },
+  { icon: "❄️", label: "A/C", value: "AUTO", bg: "bg-indigo-400/20" },
+  { icon: "🚿", label: "Irrigation", value: "SCHEDULED", bg: "bg-emerald-500/20" },
+  { icon: "💧", label: "Pump", value: "RUNNING", bg: "bg-sky-400/20" },
+  { icon: "📏", label: "Tank Level", value: "2,450 L", bg: "bg-teal-400/20" },
+];
+
 export function HeroSection() {
   const [consultantDialogOpen, setConsultantDialogOpen] = useState(false);
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
 
-  // Rotating device telemetry
-  const sensorCards = [
-    { icon: "🌡️", label: "Temperature", value: "26.1°C", bg: "bg-primary/20" },
-    { icon: "💧", label: "Humidity", value: "61%", bg: "bg-blue-400/20" },
-    { icon: "🫧", label: "CO2", value: "812 ppm", bg: "bg-cyan-400/20" },
-    { icon: "🌀", label: "Fan", value: "ON", bg: "bg-green-500/20" },
-    { icon: "❄️", label: "A/C", value: "AUTO", bg: "bg-indigo-400/20" },
-    { icon: "🚿", label: "Irrigation", value: "SCHEDULED", bg: "bg-emerald-500/20" },
-    { icon: "💧", label: "Pump", value: "RUNNING", bg: "bg-sky-400/20" },
-    { icon: "📏", label: "Tank Level", value: "2,450 L", bg: "bg-teal-400/20" },
-  ];
   const trustPoints = [
     "Built for outdoor and industrial environments",
     "Remote monitoring with instant alerting",
@@ -212,8 +212,16 @@ export function HeroSection() {
         </div>
       </div>
 
-      <ConsultationCardSection open={consultantDialogOpen} onOpenChange={setConsultantDialogOpen} />
-      <DemoRequestDialog open={quoteDialogOpen} onOpenChange={setQuoteDialogOpen} />
+      <ConsultationCardSection
+        open={consultantDialogOpen}
+        onOpenChange={setConsultantDialogOpen}
+        requestFor="ROOT_CONSULTATION_REQUEST"
+      />
+      <DemoRequestDialog
+        open={quoteDialogOpen}
+        onOpenChange={setQuoteDialogOpen}
+        requestFor="ROOT_CUSTOM_SOLUTION_REQUEST"
+      />
     </section>
   );
 }

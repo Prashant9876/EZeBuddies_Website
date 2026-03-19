@@ -23,7 +23,11 @@ export function StickyMobileCta() {
         </div>
       </div>
 
-      <ConsultationCardSection open={consultantDialogOpen} onOpenChange={setConsultantDialogOpen} />
+      <ConsultationCardSection
+        open={consultantDialogOpen}
+        onOpenChange={setConsultantDialogOpen}
+        requestFor="MOBILE_STICKY_CONSULTATION_REQUEST"
+      />
     </>
   );
 }
