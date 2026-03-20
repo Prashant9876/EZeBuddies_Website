@@ -24,9 +24,13 @@ export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
+  const [forgotUserId, setForgotUserId] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [isForgotSubmitting, setIsForgotSubmitting] = useState(false);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +90,110 @@ export function Header() {
       });
     } finally {
       setIsLoginSubmitting(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const userId = forgotUserId.trim();
+    const email = forgotEmail.trim();
+
+    if (!userId && !email) {
+      toast({
+        title: "Missing details",
+        description: "Please enter user ID or email.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsForgotSubmitting(true);
+
+    const forgotApiUrl = import.meta.env.VITE_FORGOT_PASSWORD_API_URL || "https://api.ezebuddies.com/forgot-password";
+
+    const postForgot = async (payload: Record<string, string>) => {
+      const response = await fetch(forgotApiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const rawText = await response.text();
+      let responseData: unknown = null;
+      try {
+        responseData = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        responseData = rawText || null;
+      }
+
+      return { response, responseData, rawText };
+    };
+
+    try {
+      let result;
+      if (userId) {
+        // Retry with common backend key variants for user identifier.
+        const candidatePayloads: Array<Record<string, string>> = [
+          { user_id: userId },
+          { username: userId },
+          { userId: userId },
+        ];
+
+        for (const payload of candidatePayloads) {
+          result = await postForgot(payload);
+          if (result.response.ok) break;
+        }
+      } else {
+        result = await postForgot({ email });
+      }
+
+      if (!result || !result.response.ok) {
+        const responseData = result?.responseData;
+        const detailFromObject =
+          typeof responseData === "object" &&
+          responseData !== null &&
+          "detail" in responseData &&
+          typeof (responseData as { detail?: unknown }).detail === "string"
+            ? (responseData as { detail: string }).detail
+            : null;
+        const messageFromObject =
+          typeof responseData === "object" &&
+          responseData !== null &&
+          "message" in responseData &&
+          typeof (responseData as { message?: unknown }).message === "string"
+            ? (responseData as { message: string }).message
+            : null;
+        const detailFromString = typeof responseData === "string" ? responseData : null;
+        const detail =
+          detailFromObject ||
+          messageFromObject ||
+          detailFromString ||
+          `Forgot password request failed (${result?.response.status ?? "unknown"}).`;
+        throw new Error(detail);
+      }
+
+      toast({
+        title: "Reset link sent",
+        description: "Reset password mail sent to registered email.",
+      });
+      setForgotUserId("");
+      setForgotEmail("");
+      setForgotOpen(false);
+    } catch (error) {
+      console.error("Forgot password failed:", error);
+      const errorMessage =
+        error instanceof TypeError
+          ? "Network/CORS error. Please check backend CORS for this domain."
+          : error instanceof Error
+            ? error.message
+            : "Could not process forgot password request.";
+      toast({
+        title: "Request failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsForgotSubmitting(false);
     }
   };
 
@@ -243,8 +351,60 @@ export function Header() {
                 required
               />
             </div>
+            <button
+              type="button"
+              className="text-sm text-primary hover:underline"
+              onClick={() => {
+                setLoginOpen(false);
+                setForgotOpen(true);
+              }}
+            >
+              Forgot password?
+            </button>
             <Button type="submit" className="w-full" disabled={isLoginSubmitting}>
               {isLoginSubmitting ? "Signing In..." : "Sign In"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Forgot Password</DialogTitle>
+            <DialogDescription>
+              Enter user ID or email to receive reset password instructions.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleForgotSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="forgot-user-id">User ID</Label>
+              <Input
+                id="forgot-user-id"
+                value={forgotUserId}
+                onChange={(e) => setForgotUserId(e.target.value)}
+                placeholder="e.g. ritesh_farms"
+              />
+            </div>
+            
+            <div className="flex items-center gap-2 my-2">
+              <div className="flex-1 h-px bg-gray-300"></div>
+              <span className="text-sm text-gray-500">OR</span>
+              <div className="flex-1 h-px bg-gray-300"></div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="forgot-email">Email</Label>
+              <Input
+                id="forgot-email"
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Submit with either user ID or email.</p>
+            <Button type="submit" className="w-full" disabled={isForgotSubmitting}>
+              {isForgotSubmitting ? "Submitting..." : "Submit"}
             </Button>
           </form>
         </DialogContent>
