@@ -1,8 +1,9 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { Building2, Egg, Factory, Landmark, Milk, PawPrint, Sprout, Trees, Waves } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 
-const useCases = [
+const useCasesEn = [
   {
     icon: Sprout,
     title: "Field & CEA",
@@ -105,9 +106,24 @@ const useCases = [
   },
 ];
 
+const useCasesHi = [
+  { icon: Sprout, title: "फील्ड और CEA", summary: "कम मैनुअल हस्तक्षेप के साथ सिंचाई और क्लाइमेट रूटीन ऑटोमेट करें।", segment: "कृषि", accent: "from-emerald-500 to-teal-500", chip: "उच्च ROI", image: "https://images.unsplash.com/photo-1464226184884-fa280b87c399?auto=format&fit=crop&w=900&q=80" },
+  { icon: Trees, title: "पार्क और लैंडस्केपिंग", summary: "डिस्ट्रिब्यूटेड ग्रीन एरिया में सिंचाई और पंप ऑपरेशन शेड्यूल करें।", segment: "पब्लिक इंफ्रा", accent: "from-lime-500 to-emerald-500", chip: "मल्टी साइट्स", image: "https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=900&q=80" },
+  { icon: Landmark, title: "स्टेडियम टर्फ", summary: "विश्वसनीय साइकिल कंट्रोल और अलर्ट के साथ टर्फ कंडीशन स्थिर रखें।", segment: "स्पोर्ट्स इंफ्रा", accent: "from-amber-500 to-orange-500", chip: "प्रेसिशन साइकिल", image: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=900&q=80" },
+  { icon: Waves, title: "वाटर इंफ्रास्ट्रक्चर", summary: "टैंक लेवल ट्रैक करें और ओवरफ्लो/ड्राइ रन पंप इवेंट रोकें।", segment: "यूटिलिटीज़", accent: "from-cyan-500 to-sky-500", chip: "सेफ्टी फर्स्ट", image: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=900&q=80" },
+  { icon: Building2, title: "कैंपस और बिल्डिंग्स", summary: "यूटिलिटी मॉनिटरिंग केंद्रीकृत करें और रिपीट होने वाले काम ऑटोमेट करें।", segment: "फैसिलिटी", accent: "from-violet-500 to-indigo-500", chip: "केंद्रीकृत ऑप्स", image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=900&q=80" },
+  { icon: Factory, title: "इंडस्ट्रियल यूटिलिटीज़", summary: "टेलीमेट्री-बेस्ड लॉजिक और अलार्म एस्केलेशन के साथ संचालन करें।", segment: "इंडस्ट्री", accent: "from-slate-600 to-slate-800", chip: "प्रोसेस विश्वसनीयता", image: "https://images.unsplash.com/photo-1565008447742-97f6f38c985c?auto=format&fit=crop&w=900&q=80" },
+  { icon: Egg, title: "पोल्ट्री फार्म", summary: "बेहतर फ्लॉक मैनेजमेंट के लिए वातावरण और पानी/एयरफ्लो ऑटोमेट करें।", segment: "पशुपालन", accent: "from-yellow-500 to-amber-500", chip: "फ्लॉक कम्फर्ट", image: "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&w=900&q=80" },
+  { icon: Milk, title: "डेयरी फार्म", summary: "डेयरी सुविधाओं में क्लाइमेट और पानी सिस्टम ऑटोमेशन करें।", segment: "पशुपालन", accent: "from-blue-500 to-cyan-500", chip: "डेयरी कंट्रोल", image: "https://images.unsplash.com/photo-1516467508483-a7212febe31a?auto=format&fit=crop&w=900&q=80" },
+  { icon: PawPrint, title: "बकरी और भेड़ फार्म", summary: "शेड, पानी और ऑपरेशन्स के लिए रिमोट मॉनिटरिंग अपनाएं।", segment: "पशुपालन", accent: "from-fuchsia-500 to-rose-500", chip: "शेड ऑटोमेशन", image: "https://images.unsplash.com/photo-1516467508483-a7212febe31a?auto=format&fit=crop&w=900&q=80" },
+  { icon: Waves, title: "फिशरीज और एक्वाकल्चर", summary: "पानी इंफ्रा ट्रैक करें और पंप साइकिल से पॉन्ड मैनेजमेंट सुधारें।", segment: "एक्वाकल्चर", accent: "from-sky-500 to-blue-600", chip: "पॉन्ड मैनेजमेंट", image: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=900&q=80" },
+];
+
 export function CustomerUseCasesSection() {
+  const { language } = useLanguage();
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-80px" });
+  const useCases = language === "hi" ? useCasesHi : useCasesEn;
   const marqueeCards = [...useCases, ...useCases];
 
   return (
@@ -122,13 +138,15 @@ export function CustomerUseCasesSection() {
           className="text-center mb-14"
         >
           <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            Customer Use-cases
+            {language === "hi" ? "कस्टमर उपयोग" : "Customer Use-cases"}
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Where You Can Use Our Devices
+            {language === "hi" ? "आप हमारे डिवाइस कहाँ उपयोग कर सकते हैं" : "Where You Can Use Our Devices"}
           </h2>
           <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            Flexible deployment models for agriculture, livestock management, infrastructure, and utility applications.
+            {language === "hi"
+              ? "कृषि, पशुपालन, इंफ्रास्ट्रक्चर और यूटिलिटी उपयोगों के लिए लचीले डिप्लॉयमेंट मॉडल।"
+              : "Flexible deployment models for agriculture, livestock management, infrastructure, and utility applications."}
           </p>
         </motion.div>
 

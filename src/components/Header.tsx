@@ -8,19 +8,14 @@ import { Label } from "./ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { saveAuthFromLogin } from "@/lib/auth";
+import { useLanguage } from "@/lib/language";
+import { LanguageSelector } from "@/components/LanguageSelector";
 import logoImg from "@/assets/devices/logo.png";
-
-const navLinks = [
-  { name: "Home", href: "#home" },
-  { name: "Use-cases", href: "#use-cases" },
-  { name: "Products", href: "#products" },
-  { name: "About Us", href: "#about" },
-  { name: "Solutions", href: "#solutions" },
-];
 
 export function Header() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -39,8 +34,8 @@ export function Header() {
     const loginApiUrl = import.meta.env.VITE_LOGIN_API_URL;
     if (!loginApiUrl) {
       toast({
-        title: "Login API not configured",
-        description: "Set VITE_LOGIN_API_URL in your environment file.",
+        title: t("toast.loginApiNotConfigured.title"),
+        description: t("toast.loginApiNotConfigured.description"),
         variant: "destructive",
       });
       setIsLoginSubmitting(false);
@@ -78,14 +73,14 @@ export function Header() {
       setLoginOpen(false);
       navigate("/dashboard");
       toast({
-        title: "Login successful",
-        description: "Welcome. Redirecting to dashboard.",
+        title: t("toast.loginSuccess.title"),
+        description: t("toast.loginSuccess.description"),
       });
     } catch (error) {
       console.error("Login failed:", error);
       toast({
-        title: "Login failed",
-        description: "Please check username/password and try again.",
+        title: t("toast.loginFailed.title"),
+        description: t("toast.loginFailed.description"),
         variant: "destructive",
       });
     } finally {
@@ -100,8 +95,8 @@ export function Header() {
 
     if (!userId && !email) {
       toast({
-        title: "Missing details",
-        description: "Please enter user ID or email.",
+        title: t("toast.forgotMissing.title"),
+        description: t("toast.forgotMissing.description"),
         variant: "destructive",
       });
       return;
@@ -173,8 +168,8 @@ export function Header() {
       }
 
       toast({
-        title: "Reset link sent",
-        description: "Reset password mail sent to registered email.",
+        title: t("toast.forgotSuccess.title"),
+        description: t("toast.forgotSuccess.description"),
       });
       setForgotUserId("");
       setForgotEmail("");
@@ -183,12 +178,12 @@ export function Header() {
       console.error("Forgot password failed:", error);
       const errorMessage =
         error instanceof TypeError
-          ? "Network/CORS error. Please check backend CORS for this domain."
+          ? t("toast.forgotNetwork.description")
           : error instanceof Error
             ? error.message
-            : "Could not process forgot password request.";
+            : t("toast.forgotFallback.description");
       toast({
-        title: "Request failed",
+        title: t("toast.forgotFailed.title"),
         description: errorMessage,
         variant: "destructive",
       });
@@ -204,6 +199,14 @@ export function Header() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const navLinks = [
+    { name: t("header.home"), href: "#home" },
+    { name: t("header.useCases"), href: "#use-cases" },
+    { name: t("header.products"), href: "#products" },
+    { name: t("header.aboutUs"), href: "#about" },
+    { name: t("header.solutions"), href: "#solutions" },
+  ];
 
   return (
     <motion.header
@@ -253,17 +256,18 @@ export function Header() {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-3">
+            <LanguageSelector />
             <Button variant="outline" size="lg" asChild>
               <a
                 href="https://mail.google.com/mail/?view=cm&fs=1&to=contact@ezebuddies.com"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Talk to Sales
+                {t("header.talkToSales")}
               </a>
             </Button>
             <Button variant="hero" size="lg" onClick={() => setLoginOpen(true)}>
-              Login
+              {t("header.login")}
             </Button>
           </div>
 
@@ -302,17 +306,18 @@ export function Header() {
                 </a>
               ))}
               <div className="flex flex-col gap-3 mt-4">
+                <LanguageSelector />
                 <Button variant="outline" size="lg" asChild>
                   <a
                     href="https://mail.google.com/mail/?view=cm&fs=1&to=contact@ezebuddies.com"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    Talk to Sales
+                    {t("header.talkToSales")}
                   </a>
                 </Button>
                 <Button variant="hero" size="lg" onClick={() => setLoginOpen(true)}>
-                  Login
+                  {t("header.login")}
                 </Button>
               </div>
             </div>
@@ -323,31 +328,31 @@ export function Header() {
       <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display">Login</DialogTitle>
-            <DialogDescription>Enter your username and password.</DialogDescription>
+            <DialogTitle className="font-display">{t("login.title")}</DialogTitle>
+            <DialogDescription>{t("login.description")}</DialogDescription>
           </DialogHeader>
           <form
             className="space-y-4"
             onSubmit={handleLoginSubmit}
           >
             <div className="space-y-2">
-              <Label htmlFor="login-username">Username</Label>
+              <Label htmlFor="login-username">{t("login.username")}</Label>
               <Input
                 id="login-username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
+                placeholder={t("login.usernamePlaceholder")}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="login-password">Password</Label>
+              <Label htmlFor="login-password">{t("login.password")}</Label>
               <Input
                 id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
+                placeholder={t("login.passwordPlaceholder")}
                 required
               />
             </div>
@@ -359,10 +364,10 @@ export function Header() {
                 setForgotOpen(true);
               }}
             >
-              Forgot password?
+              {t("login.forgotPassword")}
             </button>
             <Button type="submit" className="w-full" disabled={isLoginSubmitting}>
-              {isLoginSubmitting ? "Signing In..." : "Sign In"}
+              {isLoginSubmitting ? t("login.signingIn") : t("login.signIn")}
             </Button>
           </form>
         </DialogContent>
@@ -371,19 +376,19 @@ export function Header() {
       <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-display">Forgot Password</DialogTitle>
+            <DialogTitle className="font-display">{t("forgot.title")}</DialogTitle>
             <DialogDescription>
-              Enter user ID or email to receive reset password instructions.
+              {t("forgot.description")}
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={handleForgotSubmit}>
             <div className="space-y-2">
-              <Label htmlFor="forgot-user-id">User ID</Label>
+              <Label htmlFor="forgot-user-id">{t("forgot.userId")}</Label>
               <Input
                 id="forgot-user-id"
                 value={forgotUserId}
                 onChange={(e) => setForgotUserId(e.target.value)}
-                placeholder="e.g. ritesh_farms"
+                placeholder={t("forgot.userIdPlaceholder")}
               />
             </div>
             
@@ -393,18 +398,18 @@ export function Header() {
               <div className="flex-1 h-px bg-gray-300"></div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="forgot-email">Email</Label>
+              <Label htmlFor="forgot-email">{t("forgot.email")}</Label>
               <Input
                 id="forgot-email"
                 type="email"
                 value={forgotEmail}
                 onChange={(e) => setForgotEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder={t("forgot.emailPlaceholder")}
               />
             </div>
-            <p className="text-xs text-muted-foreground">Submit with either user ID or email.</p>
+            <p className="text-xs text-muted-foreground">{t("forgot.helperText")}</p>
             <Button type="submit" className="w-full" disabled={isForgotSubmitting}>
-              {isForgotSubmitting ? "Submitting..." : "Submit"}
+              {isForgotSubmitting ? t("forgot.submitting") : t("forgot.submit")}
             </Button>
           </form>
         </DialogContent>

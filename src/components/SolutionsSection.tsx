@@ -2,8 +2,9 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { Users, Target, Wrench, GraduationCap, LifeBuoy, TrendingUp } from "lucide-react";
 import { Button } from "./ui/button";
+import { useLanguage } from "@/lib/language";
 
-const solutions = [
+const solutionsEn = [
   {
     icon: Users,
     title: "Consultation & Site Study",
@@ -42,9 +43,20 @@ const solutions = [
   },
 ];
 
+const solutionsHi = [
+  { icon: Users, title: "कंसल्टेशन और साइट स्टडी", description: "सेटअप सुझाने से पहले हम ऑपरेशन, चुनौतियाँ और लक्ष्य समझते हैं।", features: ["यूज-केस मैपिंग", "साइट सीमाएँ", "आवश्यकता फाइनल"] },
+  { icon: Target, title: "सॉल्यूशन ब्लूप्रिंट", description: "डिवाइस, कंट्रोल लॉजिक, कम्युनिकेशन और रोलआउट का स्पष्ट प्लान मिलता है।", features: ["डिवाइस आर्किटेक्चर", "कंट्रोल स्ट्रैटेजी", "डिप्लॉयमेंट रोडमैप"] },
+  { icon: Wrench, title: "डिप्लॉयमेंट और कमिशनिंग", description: "हम थ्रेशोल्ड, शेड्यूल और नियम कॉन्फ़िगर करके वास्तविक ऑपरेशन वैलिडेट करते हैं।", features: ["ऑन-साइट सेटअप", "वर्कफ़्लो ट्यूनिंग", "एक्सेप्टेंस टेस्ट"] },
+  { icon: GraduationCap, title: "टीम ट्रेनिंग", description: "ऑपरेटर और मैनेजर को डैशबोर्ड और कंट्रोल का प्रैक्टिकल प्रशिक्षण मिलता है।", features: ["ऑपरेटर ट्रेनिंग", "SOP गाइडेंस", "एस्केलेशन प्लेबुक"] },
+  { icon: LifeBuoy, title: "सपोर्ट और मेंटेनेंस", description: "सिस्टम विश्वसनीय रहे इसके लिए हम ट्रबलशूटिंग और अपग्रेड सपोर्ट देते हैं।", features: ["रिमोट सपोर्ट", "हेल्थ चेक", "वर्ज़न अपग्रेड"] },
+  { icon: TrendingUp, title: "ऑप्टिमाइजेशन और स्केल", description: "गो-लाइव के बाद दक्षता बढ़ाने और मल्टी-साइट विस्तार में मदद करते हैं।", features: ["परफॉर्मेंस रिव्यू", "ROI ट्रैकिंग", "मल्टी-साइट स्केलअप"] },
+];
+
 export function SolutionsSection() {
+  const { language } = useLanguage();
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
+  const solutions = language === "hi" ? solutionsHi : solutionsEn;
 
   return (
     <section id="solutions" className="py-24 bg-background">
@@ -57,13 +69,15 @@ export function SolutionsSection() {
           className="text-center mb-16"
         >
           <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            Customer Success
+            {language === "hi" ? "कस्टमर सक्सेस" : "Customer Success"}
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            How We Work With You
+            {language === "hi" ? "हम आपके साथ कैसे काम करते हैं" : "How We Work With You"}
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            A practical delivery model designed to reduce risk, speed up adoption, and maximize outcomes.
+            {language === "hi"
+              ? "रिस्क कम करने, अपनाने की गति बढ़ाने और बेहतर परिणाम देने वाला प्रैक्टिकल मॉडल।"
+              : "A practical delivery model designed to reduce risk, speed up adoption, and maximize outcomes."}
           </p>
         </motion.div>
 
@@ -101,7 +115,7 @@ export function SolutionsSection() {
                 </ul>
 
                 <Button variant="ghost" size="sm" className="p-0 h-auto text-primary hover:text-primary/80">
-                  Included in Delivery →
+                  {language === "hi" ? "डिलीवरी में शामिल →" : "Included in Delivery →"}
                 </Button>
               </motion.div>
             );

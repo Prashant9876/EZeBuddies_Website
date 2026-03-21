@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
+import { useLanguage } from "@/lib/language";
 
 // Import product images
 import irrivaImg from "@/assets/devices/irriva.png";
@@ -33,7 +34,7 @@ import flowvaImg from "@/assets/devices/hydrolevel.png";
 import mainImage from "@/assets/devices/main_image.png";
 
 // Core device portfolio
-const products = [
+const productsEn = [
   {
     id: "irriva",
     name: "Smart Sinchai",
@@ -157,6 +158,70 @@ const products = [
   }
 ];
 
+const productsHi = [
+  {
+    ...productsEn[0],
+    tagline: "स्मार्ट इरिगेशन कंट्रोलर",
+    subtitle: "सिंचाई यूनिट ऑटोमेशन",
+    description: "फील्ड, CEA, पार्क और लैंडस्केपिंग साइट्स के लिए सिंचाई ऑटोमेट करता है।",
+    features: [
+      { icon: Activity, label: "ज़ोन कंट्रोल", desc: "वाल्व और लाइन ऑटोमेशन" },
+      { icon: Timer, label: "लचीला शेड्यूल", desc: "समय और अंतराल लॉजिक" },
+      { icon: Gauge, label: "रनटाइम ट्रैकिंग", desc: "उपयोग और साइकिल हिस्ट्री" },
+      { icon: AlertTriangle, label: "फॉल्ट अलर्ट", desc: "ड्राइ रन और एनोमली अलर्ट" },
+      { icon: Shield, label: "प्रोटेक्शन लॉजिक", desc: "ऑटो कट-ऑफ" },
+      { icon: Cpu, label: "क्लाउड + एज", desc: "विश्वसनीय रिमोट मैनेजमेंट" },
+    ],
+    specs: ["सिंगल/मल्टी-ज़ोन डिप्लॉयमेंट", "LoRa और Wi-Fi", "रिमोट ऑन/ऑफ और शेड्यूल", "इवेंट और फॉल्ट लॉग", "IP रेटेड एनक्लोजर", "फील्ड/लैंडस्केप सिस्टम सपोर्ट"],
+  },
+  {
+    ...productsEn[1],
+    tagline: "क्लाइमेट कंट्रोल डिवाइस",
+    subtitle: "तापमान • आर्द्रता • CO2 + एक्ट्यूएशन",
+    description: "तापमान, आर्द्रता और CO2 को रियल टाइम में मापता है और कंट्रोल करता है।",
+    features: [
+      { icon: Thermometer, label: "तापमान सेंसिंग", desc: "निरंतर मॉनिटरिंग" },
+      { icon: Droplets, label: "आर्द्रता ट्रैकिंग", desc: "सटीक RH एनालिटिक्स" },
+      { icon: Wind, label: "CO2 मॉनिटरिंग", desc: "रियल-टाइम ppm" },
+      { icon: Activity, label: "ऑटो एक्ट्यूएशन", desc: "फैन और A/C कंट्रोल" },
+      { icon: AlertTriangle, label: "थ्रेशोल्ड अलर्ट", desc: "तुरंत अलर्ट" },
+      { icon: Cpu, label: "रिमोट + लोकल", desc: "क्लाउड और एज मोड" },
+    ],
+    specs: ["तापमान/आर्द्रता/CO2 टेलीमेट्री", "फैन/A.C. आउटपुट", "कस्टम थ्रेशोल्ड लॉजिक", "LoRa और Wi-Fi", "डैशबोर्ड और मोबाइल अलर्ट"],
+  },
+  {
+    ...productsEn[2],
+    tagline: "जल मात्रा + पंप कंट्रोल",
+    subtitle: "लीटर मापन और ऑटोमेशन",
+    description: "पानी की मात्रा (लीटर) मापता है और टैंक-लॉजिक से पंप ऑटोमेट करता है।",
+    features: [
+      { icon: Waves, label: "लेवल सेंसिंग", desc: "निरंतर टैंक ट्रैकिंग" },
+      { icon: Gauge, label: "लीटर कैल्कुलेशन", desc: "लाइव वॉल्यूम" },
+      { icon: Zap, label: "पंप कंट्रोल", desc: "ऑटो फिल और रिफिल" },
+      { icon: AlertTriangle, label: "प्रोटेक्शन अलर्ट", desc: "ओवरफ्लो/ड्राइ रन" },
+      { icon: Shield, label: "सेफ्टी इंटरलॉक्स", desc: "पंप सुरक्षा" },
+      { icon: Activity, label: "उपयोग लॉग", desc: "कंजम्प्शन ट्रेंड्स" },
+    ],
+    specs: ["टैंक लेवल से लीटर कन्वर्ज़न", "पंप ON/OFF आउटपुट", "कन्फ़िगरेबल थ्रेशोल्ड", "LoRa और Wi-Fi", "इंडस्ट्रियल डिप्लॉयमेंट"],
+  },
+  {
+    ...productsEn[3],
+    name: "कस्टम IOT सॉल्यूशन्स",
+    tagline: "आपकी आवश्यकता अनुसार",
+    subtitle: "कस्टम डिवाइस + कंट्रोल इंजीनियरिंग",
+    description: "हम आपके यूज-केस के लिए कस्टम IoT प्रोडक्ट और ऑटोमेशन पैनल डिज़ाइन करते हैं।",
+    features: [
+      { icon: Cpu, label: "कस्टम हार्डवेयर", desc: "सेंसर और कंट्रोलर इंटीग्रेशन" },
+      { icon: SlidersHorizontal, label: "टेलर्ड लॉजिक", desc: "बिजनेस-विशिष्ट वर्कफ़्लो" },
+      { icon: Activity, label: "प्रोटोकॉल सपोर्ट", desc: "LoRa, Wi-Fi, RS485 आदि" },
+      { icon: Shield, label: "रग्ड डिज़ाइन", desc: "फील्ड-रेडी एनक्लोजर" },
+      { icon: Timer, label: "कमिशनिंग सपोर्ट", desc: "डिप्लॉयमेंट और हैंडओवर" },
+      { icon: AlertTriangle, label: "आफ्टर-सेल्स सपोर्ट", desc: "मेंटेनेंस और अपग्रेड" },
+    ],
+    specs: ["आवश्यकता-आधारित आर्किटेक्चर", "फ्लेक्सिबल I/O एक्सपेंशन", "कंट्रोल लूप्स", "डैशबोर्ड कस्टमाइजेशन", "पायलट से स्केल मॉडल"],
+  },
+];
+
 type ProductType = typeof products[0];
 
 const productUseCases: Record<string, string[]> = {
@@ -166,16 +231,25 @@ const productUseCases: Record<string, string[]> = {
   customva: ["Site-specific process control", "Protocol integration projects", "Custom panel deployments"],
 };
 
+const productUseCasesHi: Record<string, string[]> = {
+  irriva: ["फील्ड सिंचाई लाइनें", "पार्क और लैंडस्केपिंग", "स्टेडियम टर्फ शेड्यूल"],
+  climva: ["CEA और ग्रीनहाउस क्लाइमेट", "HVAC मॉनिटरिंग", "कंट्रोल्ड यूटिलिटी रूम"],
+  flowva: ["टैंक और सम्प मॉनिटरिंग", "पंप ऑटोमेशन", "वॉटर डिस्ट्रीब्यूशन पॉइंट"],
+  customva: ["साइट-विशिष्ट कंट्रोल", "प्रोटोकॉल इंटीग्रेशन", "कस्टम पैनल डिप्लॉयमेंट"],
+};
+
 function ProductDetailDialog({ 
   product, 
   open, 
   onOpenChange,
-  initialSection
+  initialSection,
+  isHindi,
 }: { 
   product: ProductType | null; 
   open: boolean; 
   onOpenChange: (open: boolean) => void;
   initialSection: "overview" | "specs";
+  isHindi: boolean;
 }) {
   const specsRef = useRef<HTMLDivElement | null>(null);
 
@@ -191,11 +265,11 @@ function ProductDetailDialog({
 
   if (!product) return null;
   const Icon = product.icon;
-  const useCases = productUseCases[product.id] ?? ["Custom deployment"];
+  const useCases = (isHindi ? productUseCasesHi : productUseCases)[product.id] ?? [isHindi ? "कस्टम डिप्लॉयमेंट" : "Custom deployment"];
   const snapshotCards = [
-    { icon: Building2, label: "Deployment Type", value: product.subtitle },
-    { icon: Wifi, label: "Connectivity", value: "LoRa + Wi-Fi" },
-    { icon: Smartphone, label: "Remote Access", value: "Mobile + Web Dashboard" },
+    { icon: Building2, label: isHindi ? "डिप्लॉयमेंट टाइप" : "Deployment Type", value: product.subtitle },
+    { icon: Wifi, label: isHindi ? "कनेक्टिविटी" : "Connectivity", value: "LoRa + Wi-Fi" },
+    { icon: Smartphone, label: isHindi ? "रिमोट एक्सेस" : "Remote Access", value: isHindi ? "मोबाइल + वेब डैशबोर्ड" : "Mobile + Web Dashboard" },
   ];
 
   return (
@@ -292,7 +366,7 @@ function ProductDetailDialog({
           <div>
             <h4 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`} />
-              Key Capabilities
+              {isHindi ? "मुख्य क्षमताएँ" : "Key Capabilities"}
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {product.features.map((feature, i) => {
@@ -310,7 +384,7 @@ function ProductDetailDialog({
                         <FeatureIcon className="w-4 h-4 text-white" />
                       </div>
                       <span className={`text-[10px] font-semibold uppercase tracking-wide ${product.accentColor}`}>
-                        Capability
+                        {isHindi ? "क्षमता" : "Capability"}
                       </span>
                     </div>
                     <span className="text-sm font-semibold text-foreground block mb-1">{feature.label}</span>
@@ -325,7 +399,7 @@ function ProductDetailDialog({
           <div ref={specsRef}>
             <h4 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`} />
-              Technical Specifications
+              {isHindi ? "तकनीकी विनिर्देश" : "Technical Specifications"}
             </h4>
             <div className="grid md:grid-cols-2 gap-3">
               {product.specs.map((spec, i) => (
@@ -349,7 +423,7 @@ function ProductDetailDialog({
           <div>
             <h4 className="font-semibold text-foreground flex items-center gap-2 mb-4">
               <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${product.heroGradient}`} />
-              Best-fit Use Cases
+              {isHindi ? "सर्वोत्तम उपयोग" : "Best-fit Use Cases"}
             </h4>
             <div className="grid md:grid-cols-3 gap-3">
               {useCases.map((item, i) => (
@@ -385,11 +459,13 @@ function ProductDetailDialog({
 function ProductCard({ 
   product, 
   index, 
-  onViewDetails 
+  onViewDetails,
+  isHindi,
 }: { 
   product: ProductType; 
   index: number; 
-  onViewDetails: (product: ProductType, section: "overview" | "specs") => void 
+  onViewDetails: (product: ProductType, section: "overview" | "specs") => void;
+  isHindi: boolean;
 }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
@@ -425,7 +501,7 @@ function ProductCard({
 
           <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
             <span className="text-[10px] tracking-wide uppercase font-semibold px-3 py-1 rounded-full bg-white/85 text-slate-800 border border-white/80">
-              Ready to Deploy
+              {isHindi ? "डिप्लॉयमेंट रेडी" : "Ready to Deploy"}
             </span>
             <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${product.heroGradient} flex items-center justify-center shadow-lg`}>
               <Icon className="w-5 h-5 text-white" />
@@ -449,7 +525,9 @@ function ProductCard({
 
         <div className="p-6">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ideal for</span>
+            <span className={`text-xs font-semibold uppercase tracking-wider text-muted-foreground`}>
+              {isHindi ? "उपयुक्त" : "Ideal for"}
+            </span>
             <span className={`text-xs font-semibold ${product.accentColor}`}>{product.subtitle}</span>
           </div>
 
@@ -477,7 +555,7 @@ function ProductCard({
               className={`flex-1 h-11 rounded-xl bg-gradient-to-r ${product.heroGradient} text-white hover:opacity-90 transition-opacity group/btn shadow-md`}
               onClick={() => onViewDetails(product, "overview")}
             >
-              <span>View Details</span>
+              <span>{isHindi ? "विवरण देखें" : "View Details"}</span>
               <motion.span className="ml-2" animate={isHovered ? { x: 4 } : { x: 0 }}>
                 <ArrowRight className="w-4 h-4" />
               </motion.span>
@@ -489,7 +567,7 @@ function ProductCard({
             >
               <a href={product.catalogUrl} download>
                 <Download className="w-4 h-4" />
-                Download Catalog
+                {isHindi ? "कैटलॉग डाउनलोड" : "Download Catalog"}
               </a>
             </Button>
           </div>
@@ -500,6 +578,9 @@ function ProductCard({
 }
 
 export function ProductsSection() {
+  const { language } = useLanguage();
+  const isHindi = language === "hi";
+  const products = isHindi ? productsHi : productsEn;
   const headerRef = useRef(null);
   const isHeaderInView = useInView(headerRef, { once: true });
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
@@ -533,18 +614,21 @@ export function ProductsSection() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6"
           >
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="text-sm font-semibold text-primary">Products You Can Deploy Today</span>
+            <span className="text-sm font-semibold text-primary">
+              {isHindi ? "आज ही डिप्लॉय करने योग्य प्रोडक्ट्स" : "Products You Can Deploy Today"}
+            </span>
           </motion.div>
           
           <h2 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
             <span className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 bg-clip-text text-transparent">
-              Production-ready
+              {isHindi ? "प्रोडक्शन-रेडी" : "Production-ready"}
             </span>{" "}
-            IoT Device Portfolio
+            {isHindi ? "IoT डिवाइस पोर्टफोलियो" : "IoT Device Portfolio"}
           </h2>
           <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            Deploy Vatavaran Monitor, Smart Sinchai, and Pump Sathi for rapid automation gains, or request a custom build
-            tailored to your workflow, site conditions, and control architecture.
+            {isHindi
+              ? "तेज़ ऑटोमेशन लाभ के लिए वातावारण मॉनिटर, स्मार्ट सिंचाई और पंप साथी डिप्लॉय करें, या अपने वर्कफ़्लो और साइट अनुसार कस्टम बिल्ड रिक्वेस्ट करें।"
+              : "Deploy Vatavaran Monitor, Smart Sinchai, and Pump Sathi for rapid automation gains, or request a custom build tailored to your workflow, site conditions, and control architecture."}
           </p>
         </motion.div>
 
@@ -555,7 +639,8 @@ export function ProductsSection() {
               key={product.id} 
               product={product} 
               index={index} 
-              onViewDetails={handleViewDetails} 
+              onViewDetails={handleViewDetails}
+              isHindi={isHindi}
             />
           ))}
         </div>
@@ -575,6 +660,7 @@ export function ProductsSection() {
         open={dialogOpen} 
         onOpenChange={setDialogOpen}
         initialSection={dialogSection}
+        isHindi={isHindi}
       />
     </section>
   );

@@ -1,8 +1,9 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { Cpu, Wifi, Smartphone } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 
-const steps = [
+const stepsEn = [
   {
     number: "01",
     icon: Cpu,
@@ -23,9 +24,17 @@ const steps = [
   },
 ];
 
+const stepsHi = [
+  { number: "01", icon: Cpu, title: "कंसल्ट और स्कोप", description: "हम आपकी साइट की जरूरतें, कंट्रोल पॉइंट्स और ऑपरेटिंग कंडीशन्स समझते हैं।" },
+  { number: "02", icon: Wifi, title: "डिप्लॉय और कॉन्फ़िगर", description: "डिवाइस इंस्टॉल करके Wi-Fi/LoRa से जोड़ते हैं और ऑटोमेशन सेट करते हैं।" },
+  { number: "03", icon: Smartphone, title: "ऑपरेट और ऑप्टिमाइज", description: "रिमोट मॉनिटरिंग और कंट्रोल के साथ प्रदर्शन बेहतर बनाते हैं।" },
+];
+
 export function HowItWorksSection() {
+  const { language } = useLanguage();
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const steps = language === "hi" ? stepsHi : stepsEn;
 
   return (
     <section className="py-24 bg-muted/30 overflow-hidden">
@@ -38,13 +47,15 @@ export function HowItWorksSection() {
           className="text-center mb-16"
         >
           <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            Customer Journey
+            {language === "hi" ? "कस्टमर जर्नी" : "Customer Journey"}
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            From Consultation to Live Automation
+            {language === "hi" ? "कंसल्टेशन से लाइव ऑटोमेशन तक" : "From Consultation to Live Automation"}
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            A structured rollout model designed for quick adoption and long-term reliability
+            {language === "hi"
+              ? "तेज़ अपनाने और लंबे समय की विश्वसनीयता के लिए संरचित रोलआउट मॉडल"
+              : "A structured rollout model designed for quick adoption and long-term reliability"}
           </p>
         </motion.div>
 

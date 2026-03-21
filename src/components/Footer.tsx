@@ -1,14 +1,24 @@
 import { motion } from "framer-motion";
 import { Mail, Phone, Facebook, Twitter, Linkedin, Instagram } from "lucide-react";
 import logo from "@/assets/devices/logo.png";
+import { useLanguage } from "@/lib/language";
 
 export function Footer() {
-  const quickLinks = [
-    { label: "Home", href: "#home" },
-    { label: "Use-cases", href: "#use-cases" },
-    { label: "About Us", href: "#about" },
-    { label: "Solutions", href: "#solutions" },
-  ];
+  const { language } = useLanguage();
+  const isHindi = language === "hi";
+  const quickLinks = isHindi
+    ? [
+        { label: "होम", href: "#home" },
+        { label: "उपयोग", href: "#use-cases" },
+        { label: "हमारे बारे में", href: "#about" },
+        { label: "समाधान", href: "#solutions" },
+      ]
+    : [
+        { label: "Home", href: "#home" },
+        { label: "Use-cases", href: "#use-cases" },
+        { label: "About Us", href: "#about" },
+        { label: "Solutions", href: "#solutions" },
+      ];
 
   return (
     <footer className="bg-foreground text-background py-16">
@@ -30,7 +40,9 @@ export function Footer() {
               <span className="font-display font-bold text-xl">EzeBuddies</span>
             </div>
             <p className="text-background/70 mb-6 leading-relaxed">
-              We help customers automate climate, irrigation, and water operations with dependable IoT devices and tailored engineering support.
+              {isHindi
+                ? "हम ग्राहकों को भरोसेमंद IoT डिवाइस और इंजीनियरिंग सपोर्ट के साथ क्लाइमेट, सिंचाई और वाटर ऑपरेशन ऑटोमेट करने में मदद करते हैं।"
+                : "We help customers automate climate, irrigation, and water operations with dependable IoT devices and tailored engineering support."}
             </p>
             <div className="flex gap-4">
               {[Facebook, Twitter, Linkedin, Instagram].map((Icon, index) => (
@@ -52,7 +64,7 @@ export function Footer() {
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
           >
-            <h4 className="font-display font-semibold text-lg mb-6">Quick Links</h4>
+            <h4 className="font-display font-semibold text-lg mb-6">{isHindi ? "क्विक लिंक" : "Quick Links"}</h4>
             <ul className="space-y-3">
               {quickLinks.map((link) => (
                 <li key={link.label}>
@@ -71,9 +83,12 @@ export function Footer() {
             viewport={{ once: true }}
             transition={{ delay: 0.2 }}
           >
-            <h4 className="font-display font-semibold text-lg mb-6">Products</h4>
+            <h4 className="font-display font-semibold text-lg mb-6">{isHindi ? "प्रोडक्ट्स" : "Products"}</h4>
             <ul className="space-y-3">
-              {["Vatavaran Monitor", "Smart Sinchai", "Pump Sathi", "Custom IoT Solutions"].map((product) => (
+              {(isHindi
+                ? ["वातावरण मॉनिटर", "स्मार्ट सिंचाई", "पंप साथी", "कस्टम IoT सॉल्यूशन्स"]
+                : ["Vatavaran Monitor", "Smart Sinchai", "Pump Sathi", "Custom IoT Solutions"]
+              ).map((product) => (
                 <li key={product}>
                   <a href="#products" className="text-background/70 hover:text-primary transition-colors">
                     {product}
@@ -90,7 +105,7 @@ export function Footer() {
             viewport={{ once: true }}
             transition={{ delay: 0.3 }}
           >
-            <h4 className="font-display font-semibold text-lg mb-6">Contact Us</h4>
+            <h4 className="font-display font-semibold text-lg mb-6">{isHindi ? "संपर्क करें" : "Contact Us"}</h4>
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
                 <Mail className="w-5 h-5 text-primary mt-0.5" />
@@ -109,11 +124,15 @@ export function Footer() {
         <div className="border-t border-background/10 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-background/50 text-sm">
-              © 2025 EzeBuddies. All rights reserved.
+              {isHindi ? "© 2025 EzeBuddies. सर्वाधिकार सुरक्षित।" : "© 2025 EzeBuddies. All rights reserved."}
             </p>
             <div className="flex gap-6 text-sm">
-              <a href="#" className="text-background/50 hover:text-background transition-colors">Privacy Policy</a>
-              <a href="#" className="text-background/50 hover:text-background transition-colors">Terms of Service</a>
+              <a href="#" className="text-background/50 hover:text-background transition-colors">
+                {isHindi ? "प्राइवेसी पॉलिसी" : "Privacy Policy"}
+              </a>
+              <a href="#" className="text-background/50 hover:text-background transition-colors">
+                {isHindi ? "सेवा की शर्तें" : "Terms of Service"}
+              </a>
             </div>
           </div>
         </div>

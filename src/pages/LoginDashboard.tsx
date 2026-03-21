@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import { LanguageSelector } from "@/components/LanguageSelector";
+import { useLanguage } from "@/lib/language";
 
 type Device = {
   device_id: string;
@@ -108,6 +110,8 @@ type RealtimeApiResponse = {
   records?: unknown[];
 };
 
+type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
+
 function getRecordDeviceId(record: RealtimeRecord) {
   const value = record.Device_Id ?? record.device_id;
   return typeof value === "string" ? value : null;
@@ -138,7 +142,7 @@ function formatRelayName(key: string) {
   return key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function EnvironmentControlCard({ device, realtime }: { device: Device; realtime?: RealtimeRecord }) {
+function EnvironmentControlCard({ device, realtime, t }: { device: Device; realtime?: RealtimeRecord; t: TranslateFn }) {
   const channels = useMemo(() => {
     if (realtime) {
       const items = Object.entries(realtime)
@@ -163,16 +167,16 @@ function EnvironmentControlCard({ device, realtime }: { device: Device; realtime
       <div className="bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-4 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-white/80">Actuator</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-white/80">{t("dashboard.actuator")}</p>
             <h3 className="font-display text-xl font-semibold">{device.device_name}</h3>
           </div>
           <Cpu className="h-6 w-6" />
         </div>
-        <p className="mt-2 text-xs text-white/85">Device ID: {device.device_id}</p>
+        <p className="mt-2 text-xs text-white/85">{t("dashboard.deviceId")}: {device.device_id}</p>
       </div>
       <CardContent className="p-5">
         <div className="mb-4 flex items-center justify-between rounded-xl border border-cyan-100 bg-cyan-50/70 px-3 py-2">
-          <span className="text-sm font-medium text-cyan-700">Relay 8 Channel Board</span>
+          <span className="text-sm font-medium text-cyan-700">{t("dashboard.relayBoard")}</span>
           <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-cyan-700">
             {channels.filter((item) => item.enabled).length}/{channels.length} ON
           </span>
@@ -190,47 +194,47 @@ function EnvironmentControlCard({ device, realtime }: { device: Device; realtime
   );
 }
 
-function EnvironmentIntelCard({ device, realtime }: { device: Device; realtime?: RealtimeRecord }) {
+function EnvironmentIntelCard({ device, realtime, t }: { device: Device; realtime?: RealtimeRecord; t: TranslateFn }) {
   const baseSeed = seedFromString(device.device_id);
   const temperature = toMetric(realtime?.Etemp, metricFromSeed(baseSeed + 1, 20, 36));
   const humidity = toMetric(realtime?.Humidity, metricFromSeed(baseSeed + 2, 35, 88));
   const co2 = toMetric(realtime?.CO2, metricFromSeed(baseSeed + 3, 420, 1200, 0));
-  const deployedAt = device.deployed_at?.trim() || "Not specified";
+  const deployedAt = device.deployed_at?.trim() || t("dashboard.notSpecified");
 
   return (
     <Card className="overflow-hidden border-emerald-200/70 shadow-[0_14px_40px_-20px_rgba(16,150,87,0.6)]">
       <div className="bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-4 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-white/80">Sensor</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-white/80">{t("dashboard.sensor")}</p>
             <h3 className="font-display text-lg font-semibold text-white/95">{device.device_name}</h3>
             <p className="mt-1 rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold text-white">
-              Deployed At: {deployedAt}
+              {t("dashboard.deployedAt")}: {deployedAt}
             </p>
           </div>
           <Gauge className="h-6 w-6" />
         </div>
-        <p className="mt-2 text-xs text-white/85">Device ID: {device.device_id}</p>
+        <p className="mt-2 text-xs text-white/85">{t("dashboard.deviceId")}: {device.device_id}</p>
       </div>
       <CardContent className="grid grid-cols-1 gap-3 p-5">
         <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-3">
           <div className="mb-1 flex items-center gap-2 text-emerald-700">
             <Thermometer className="h-4 w-4" />
-            <span className="text-sm font-medium">Temperature</span>
+            <span className="text-sm font-medium">{t("dashboard.temperature")}</span>
           </div>
           <p className="text-2xl font-semibold text-emerald-900">{temperature}°C</p>
         </div>
         <div className="rounded-xl border border-sky-100 bg-sky-50/80 p-3">
           <div className="mb-1 flex items-center gap-2 text-sky-700">
             <Droplets className="h-4 w-4" />
-            <span className="text-sm font-medium">Humidity</span>
+            <span className="text-sm font-medium">{t("dashboard.humidity")}</span>
           </div>
           <p className="text-2xl font-semibold text-sky-900">{humidity}%</p>
         </div>
         <div className="rounded-xl border border-lime-100 bg-lime-50/80 p-3">
           <div className="mb-1 flex items-center gap-2 text-lime-700">
             <Leaf className="h-4 w-4" />
-            <span className="text-sm font-medium">CO2</span>
+            <span className="text-sm font-medium">{t("dashboard.co2")}</span>
           </div>
           <p className="text-2xl font-semibold text-lime-900">{co2} ppm</p>
         </div>
@@ -242,6 +246,7 @@ function EnvironmentIntelCard({ device, realtime }: { device: Device; realtime?:
 export default function LoginDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const loginResponse = getStoredLoginResponse();
   const token = getStoredAuthToken();
   const devices = getDevices(loginResponse);
@@ -259,8 +264,8 @@ export default function LoginDashboard() {
   );
   const quantityByName = useMemo(() => buildDeviceCounts(devices), [devices]);
   const userName = typeof loginResponse?.name === "string" ? loginResponse.name : "User";
-  const userEmail = typeof loginResponse?.email === "string" ? loginResponse.email : "Not available";
-  const userIdLabel = typeof loginResponse?.user_id === "string" ? loginResponse.user_id : "Not available";
+  const userEmail = typeof loginResponse?.email === "string" ? loginResponse.email : t("dashboard.notAvailable");
+  const userIdLabel = typeof loginResponse?.user_id === "string" ? loginResponse.user_id : t("dashboard.notAvailable");
 
   const handleLogout = () => {
     clearStoredAuth();
@@ -306,14 +311,14 @@ export default function LoginDashboard() {
     } catch (error) {
       console.error("Device data fetch failed:", error);
       toast({
-        title: "Live data update failed",
-        description: "Unable to refresh device data right now.",
+        title: t("dashboard.liveDataFailed.title"),
+        description: t("dashboard.liveDataFailed.description"),
         variant: "destructive",
       });
     } finally {
       setIsRefreshing(false);
     }
-  }, [token, userId, toast, setRealtimeData]);
+  }, [token, userId, toast, setRealtimeData, t]);
 
   useEffect(() => {
     if (!token || !userId) return;
@@ -343,7 +348,7 @@ export default function LoginDashboard() {
             >
               <div className="bg-gradient-to-br from-sky-600 via-cyan-600 to-blue-700 px-5 py-6 text-white">
                 <div className="mb-4 flex items-center justify-between">
-                  <p className="text-xs uppercase tracking-[0.2em] text-white/75">Navigation</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-white/75">{t("dashboard.navTitle")}</p>
                   <button
                     type="button"
                     onClick={() => setIsNavOpen(false)}
@@ -352,28 +357,15 @@ export default function LoginDashboard() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-                <h2 className="font-display text-2xl font-semibold">Welcome, {userName}</h2>
+                <h2 className="font-display text-2xl font-semibold">{t("dashboard.welcome", { name: userName })}</h2>
                 <p className="mt-1 text-sm text-white/85 break-all">{userEmail}</p>
                 <p className="mt-2 inline-flex rounded-full bg-white/15 px-3 py-1 text-xs">{userIdLabel}</p>
               </div>
               <div className="space-y-4 p-5">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3">
-                    <p className="text-xs text-emerald-700">Sensors</p>
-                    <p className="text-2xl font-semibold text-emerald-900">{sensorDevices.length}</p>
-                  </div>
-                  <div className="rounded-xl border border-cyan-100 bg-cyan-50/70 p-3">
-                    <p className="text-xs text-cyan-700">Actuators</p>
-                    <p className="text-2xl font-semibold text-cyan-900">{actuatorDevices.length}</p>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-violet-100 bg-violet-50/70 p-3">
-                  <p className="text-xs text-violet-700">Total Devices</p>
-                  <p className="text-2xl font-semibold text-violet-900">{devices.length}</p>
-                </div>
+                <LanguageSelector />
                 <div className="space-y-2">
                   <Button variant="destructive" className="w-full" onClick={handleLogout}>
-                    Logout
+                    {t("dashboard.logout")}
                   </Button>
                 </div>
               </div>
@@ -391,37 +383,38 @@ export default function LoginDashboard() {
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" onClick={() => setIsNavOpen(true)} aria-label="Open navigation panel">
+              <Button variant="outline" size="icon" onClick={() => setIsNavOpen(true)} aria-label={t("dashboard.navTitle")}>
                 <Menu className="h-5 w-5" />
               </Button>
-              <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">ezeGreen Dashboard</h1>
+              <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">{t("dashboard.title")}</h1>
             </div>
             <div className="flex items-center gap-2">
+              <LanguageSelector />
               <Button variant="outline" onClick={refreshRealtimeData}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                {isRefreshing ? "Refreshing..." : "Refresh Now"}
+                {isRefreshing ? t("dashboard.refreshing") : t("dashboard.refreshNow")}
               </Button>
               <Button variant="destructive" onClick={handleLogout}>
-                Logout
+                {t("dashboard.logout")}
               </Button>
             </div>
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle>Device Summary</CardTitle>
-              <CardDescription>Device distribution based on device name</CardDescription>
+              <CardTitle>{t("dashboard.deviceSummaryTitle")}</CardTitle>
+              <CardDescription>{t("dashboard.deviceSummaryDescription")}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
               {Object.entries(quantityByName).length === 0 && (
-                <p className="text-sm text-muted-foreground">No devices found in login response.</p>
+                <p className="text-sm text-muted-foreground">{t("dashboard.noDevices")}</p>
               )}
               {Object.entries(quantityByName).map(([name, count]) => (
                 <div key={name} className="rounded-xl border border-border bg-muted/30 p-3">
                   <p className="text-sm text-muted-foreground"></p>
                   <p className="font-semibold text-foreground">{name}</p>
                   <p className="mt-1 text-sm">
-                    Quantity: <span className="font-semibold">{count}</span>
+                    {t("dashboard.quantity")}: <span className="font-semibold">{count}</span>
                   </p>
                 </div>
               ))}
@@ -433,10 +426,10 @@ export default function LoginDashboard() {
               const normalizedName = device.device_name.toLowerCase();
               const realtime = realtimeData[device.device_id];
               if (normalizedName.includes("enviroment_intel")) {
-                return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} />;
+                return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
               }
               if (normalizedName.includes("enviroment_control")) {
-                return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} />;
+                return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} />;
               }
 
               return (

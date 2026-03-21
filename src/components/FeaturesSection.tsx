@@ -8,8 +8,9 @@ import {
   Users,
   BarChart3,
 } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 
-const features = [
+const featuresEn = [
   {
     icon: LineChart,
     title: "Real-time Dashboards",
@@ -42,7 +43,16 @@ const features = [
   },
 ];
 
-function FeatureCard({ feature, index }: { feature: typeof features[0]; index: number }) {
+const featuresHi = [
+  { icon: LineChart, title: "रियल-टाइम डैशबोर्ड", description: "डिवाइस टेलीमेट्री और कंट्रोल स्टेटस को साफ विजुअल्स के साथ मॉनिटर करें।" },
+  { icon: Bell, title: "अलर्ट और नोटिफिकेशन", description: "थ्रेशोल्ड ब्रेक, फेल्योर और एनोमली पर तुरंत अलर्ट पाएं।" },
+  { icon: RefreshCw, title: "OTA फर्मवेयर अपडेट", description: "बिना साइट विजिट के सुरक्षित फर्मवेयर अपडेट पुश करें।" },
+  { icon: Bot, title: "डिवाइस ऑटोमेशन", description: "सेंसर, रिले और एक्ट्यूएटर के बीच लॉजिक आधारित ऑटोमेशन बनाएं।" },
+  { icon: Users, title: "यूज़र मैनेजमेंट", description: "टीम और ऑपरेटर के लिए रोल-आधारित एक्सेस दें।" },
+  { icon: BarChart3, title: "रिपोर्ट्स और एनालिटिक्स", description: "कंप्लायंस, लागत और ऑप्टिमाइजेशन के लिए रिपोर्ट बनाएं।" },
+];
+
+function FeatureCard({ feature, index }: { feature: typeof featuresEn[0]; index: number }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-30px" });
   const Icon = feature.icon;
@@ -69,8 +79,10 @@ function FeatureCard({ feature, index }: { feature: typeof features[0]; index: n
 }
 
 export function FeaturesSection() {
+  const { language } = useLanguage();
   const headerRef = useRef(null);
   const isHeaderInView = useInView(headerRef, { once: true });
+  const features = language === "hi" ? featuresHi : featuresEn;
 
   return (
     <section className="py-24 bg-background">
@@ -83,13 +95,15 @@ export function FeaturesSection() {
           className="text-center mb-16"
         >
           <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            Why Customers Choose Us
+            {language === "hi" ? "क्यों चुनते हैं ग्राहक" : "Why Customers Choose Us"}
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Built for Daily Operations
+            {language === "hi" ? "रोज़मर्रा के ऑपरेशन के लिए बना" : "Built for Daily Operations"}
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            We focus on outcomes your team sees every day: fewer failures, faster response, and better control.
+            {language === "hi"
+              ? "हम उन नतीजों पर फोकस करते हैं जो आपकी टीम रोज़ देखती है: कम फेल्योर, तेज़ रिस्पॉन्स और बेहतर कंट्रोल।"
+              : "We focus on outcomes your team sees every day: fewer failures, faster response, and better control."}
           </p>
         </motion.div>
 

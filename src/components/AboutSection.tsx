@@ -1,8 +1,9 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import { ShieldCheck, Lightbulb, Handshake } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 
-const values = [
+const valuesEn = [
   {
     icon: ShieldCheck,
     title: "Reliability",
@@ -20,9 +21,17 @@ const values = [
   },
 ];
 
+const valuesHi = [
+  { icon: ShieldCheck, title: "विश्वसनीयता", description: "हम मजबूत IoT डिवाइस और कंट्रोल सिस्टम बनाते हैं जो फील्ड में लगातार काम करें।" },
+  { icon: Lightbulb, title: "नवाचार", description: "हम सेंसिंग, ऑटोमेशन और कनेक्टिविटी को लगातार बेहतर बनाते हैं।" },
+  { icon: Handshake, title: "कस्टमाइज़ेशन", description: "हम ग्राहकों के साथ मिलकर उनके वर्कफ़्लो के अनुसार समाधान बनाते हैं।" },
+];
+
 export function AboutSection() {
+  const { language } = useLanguage();
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
+  const values = language === "hi" ? valuesHi : valuesEn;
 
   return (
     <section id="about" className="py-24 bg-muted/30">
@@ -35,13 +44,15 @@ export function AboutSection() {
           className="text-center mb-16"
         >
           <span className="inline-block text-sm font-semibold text-primary mb-3 tracking-wider uppercase">
-            About Us
+            {language === "hi" ? "हमारे बारे में" : "About Us"}
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
-            About EzeBuddies
+            {language === "hi" ? "EzeBuddies के बारे में" : "About EzeBuddies"}
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            IoT automation products built for measurable operational outcomes
+            {language === "hi"
+              ? "मापने योग्य ऑपरेशनल परिणामों के लिए बने IoT ऑटोमेशन उत्पाद"
+              : "IoT automation products built for measurable operational outcomes"}
           </p>
         </motion.div>
 
@@ -52,16 +63,17 @@ export function AboutSection() {
             transition={{ duration: 0.6, delay: 0.2 }}
           >
             <h3 className="font-display text-2xl font-bold text-foreground mb-6">
-              Our Mission
+              {language === "hi" ? "हमारा मिशन" : "Our Mission"}
             </h3>
             <p className="text-muted-foreground mb-6 leading-relaxed">
-              At EzeBuddies, we design, build, and deploy IoT automation devices for climate,
-              irrigation, and water control. Our mission is to make operations easier by
-              combining accurate sensing, reliable actuation, and clear remote visibility.
+              {language === "hi"
+                ? "EzeBuddies में हम क्लाइमेट, सिंचाई और वाटर कंट्रोल के लिए IoT ऑटोमेशन डिवाइस डिजाइन, निर्माण और डिप्लॉय करते हैं। हमारा मिशन सटीक सेंसिंग, भरोसेमंद एक्ट्यूएशन और स्पष्ट रिमोट विजिबिलिटी के साथ ऑपरेशन को आसान बनाना है।"
+                : "At EzeBuddies, we design, build, and deploy IoT automation devices for climate, irrigation, and water control. Our mission is to make operations easier by combining accurate sensing, reliable actuation, and clear remote visibility."}
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              We support field agriculture, CEA facilities, parks, stadiums, campuses, and
-              industrial utilities with both standard products and customized IoT solutions.
+              {language === "hi"
+                ? "हम फील्ड एग्रीकल्चर, CEA सुविधाएँ, पार्क, स्टेडियम, कैंपस और इंडस्ट्रियल यूटिलिटीज़ को स्टैंडर्ड प्रोडक्ट्स और कस्टम IoT सॉल्यूशन्स के साथ सपोर्ट करते हैं।"
+                : "We support field agriculture, CEA facilities, parks, stadiums, campuses, and industrial utilities with both standard products and customized IoT solutions."}
             </p>
           </motion.div>
 
@@ -89,7 +101,7 @@ export function AboutSection() {
           transition={{ duration: 0.6, delay: 0.4 }}
         >
           <h3 className="font-display text-2xl font-bold text-foreground text-center mb-12">
-            Our Values
+            {language === "hi" ? "हमारे मूल्य" : "Our Values"}
           </h3>
           <div className="grid md:grid-cols-3 gap-8">
             {values.map((value, index) => {
