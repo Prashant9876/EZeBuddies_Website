@@ -16,10 +16,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Rocket } from "lucide-react";
 import vatavaranPreLaunchGraphic from "@/assets/devices/prelauch.png";
+import { useLanguage } from "@/lib/language";
 
 const Index = () => {
   const [preLaunchOpen, setPreLaunchOpen] = useState(false);
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const timer = setTimeout(() => setPreLaunchOpen(true), 500);
@@ -60,29 +62,29 @@ const Index = () => {
             <div className="absolute bottom-5 left-5 right-5">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-semibold text-white mb-3">
                 <Rocket className="w-3.5 h-3.5" />
-                PRE LAUNCH
+                {t("index.prelaunch.badge")}
               </span>
               <h2 className="font-display text-2xl md:text-3xl font-bold text-white mb-1">Vatavaran Monitor</h2>
               <p className="text-white/85 text-sm md:text-base">
-                Smart Climate Control & Monitoring Device
+                {t("index.prelaunch.subtitle")}
               </p>
             </div>
           </div>
 
           <DialogHeader className="p-6 pb-2">
-            <DialogTitle className="text-xl">Get Early Access</DialogTitle>
+            <DialogTitle className="text-xl">{t("index.prelaunch.title")}</DialogTitle>
             <DialogDescription>
-              Be among the first to deploy Vatavaran Monitor for climate automation.
+              {t("index.prelaunch.description")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="px-6 pb-6 flex flex-col sm:flex-row gap-3">
             <Button className="flex-1" onClick={handleInterested}>
-              I&apos;m Interested
+              {t("index.prelaunch.interested")}
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <Button variant="outline" className="flex-1" onClick={() => setPreLaunchOpen(false)}>
-              Maybe Later
+              {t("index.prelaunch.maybeLater")}
             </Button>
           </div>
         </DialogContent>

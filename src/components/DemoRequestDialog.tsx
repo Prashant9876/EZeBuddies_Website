@@ -22,6 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import emailjs from '@emailjs/browser';
 import { submitCustomerData } from "@/lib/customerDataApi";
+import { useLanguage } from "@/lib/language";
 
 interface DemoRequestDialogProps {
   open: boolean;
@@ -47,11 +48,16 @@ const deploymentSizes = [
   "Large enterprise rollout",
 ];
 
+const siteTypesHi = ["ओपन फील्ड", "CEA / ग्रीनहाउस", "पार्क और लैंडस्केपिंग", "स्टेडियम", "इंडस्ट्रियल यूटिलिटी", "कॉमर्शियल बिल्डिंग", "अन्य"];
+const deploymentSizesHi = ["सिंगल साइट", "2-5 साइट", "5-20 साइट", "20+ साइट", "बड़ा एंटरप्राइज रोलआउट"];
+
 export function DemoRequestDialog({
   open,
   onOpenChange,
   requestFor = "DEMO_REQUEST",
 }: DemoRequestDialogProps) {
+  const { language } = useLanguage();
+  const isHindi = language === "hi";
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -98,8 +104,8 @@ export function DemoRequestDialog({
       }
 
       toast({
-        title: "Demo Request Sent",
-        description: "Thank you for your interest! We will get back to you soon.",
+        title: isHindi ? "रिक्वेस्ट भेजी गई" : "Demo Request Sent",
+        description: isHindi ? "धन्यवाद! हम जल्द आपसे संपर्क करेंगे।" : "Thank you for your interest! We will get back to you soon.",
       });
       onOpenChange(false);
       setFormData({
@@ -115,8 +121,8 @@ export function DemoRequestDialog({
     } catch (error) {
       console.error("Demo request failed:", error);
       toast({
-        title: "Error",
-        description: "Something went wrong. Please try again later.",
+        title: isHindi ? "त्रुटि" : "Error",
+        description: isHindi ? "कुछ गलत हुआ। कृपया बाद में फिर प्रयास करें।" : "Something went wrong. Please try again later.",
         variant: "destructive",
       });
       setIsSubmitting(false);
@@ -133,10 +139,10 @@ export function DemoRequestDialog({
             </div>
             <div>
               <DialogTitle className="font-display text-xl font-bold">
-                Request a Consultation
+                {isHindi ? "कंसल्टेशन रिक्वेस्ट करें" : "Request a Consultation"}
               </DialogTitle>
               <DialogDescription className="text-sm">
-                Share your requirement and we will suggest the right device stack
+                {isHindi ? "अपनी आवश्यकता साझा करें, हम सही डिवाइस स्टैक सुझाएंगे" : "Share your requirement and we will suggest the right device stack"}
               </DialogDescription>
             </div>
           </div>
@@ -147,11 +153,11 @@ export function DemoRequestDialog({
           <div className="space-y-2">
             <Label htmlFor="name" className="flex items-center gap-2">
               <User className="w-4 h-4 text-muted-foreground" />
-              Full Name
+              {isHindi ? "पूरा नाम" : "Full Name"}
             </Label>
             <Input
               id="name"
-              placeholder="John Doe"
+              placeholder={isHindi ? "आपका नाम" : "John Doe"}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
@@ -163,7 +169,7 @@ export function DemoRequestDialog({
             <div className="space-y-2">
               <Label htmlFor="email" className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-muted-foreground" />
-                Email
+                {isHindi ? "ईमेल" : "Email"}
               </Label>
               <Input
                 id="email"
@@ -177,7 +183,7 @@ export function DemoRequestDialog({
             <div className="space-y-2">
               <Label htmlFor="phone" className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-muted-foreground" />
-                Phone
+                {isHindi ? "फोन" : "Phone"}
               </Label>
               <Input
                 id="phone"
@@ -195,7 +201,7 @@ export function DemoRequestDialog({
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-muted-foreground" />
-                Site Type
+                {isHindi ? "साइट प्रकार" : "Site Type"}
               </Label>
               <Select
                 value={formData.siteType}
@@ -203,10 +209,10 @@ export function DemoRequestDialog({
                 required
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select site type" />
+                  <SelectValue placeholder={isHindi ? "साइट प्रकार चुनें" : "Select site type"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {siteTypes.map((type) => (
+                  {(isHindi ? siteTypesHi : siteTypes).map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
                     </SelectItem>
@@ -217,7 +223,7 @@ export function DemoRequestDialog({
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-muted-foreground" />
-                Deployment Size
+                {isHindi ? "डिप्लॉयमेंट आकार" : "Deployment Size"}
               </Label>
               <Select
                 value={formData.deploymentSize}
@@ -225,10 +231,10 @@ export function DemoRequestDialog({
                 required
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select deployment size" />
+                  <SelectValue placeholder={isHindi ? "डिप्लॉयमेंट आकार चुनें" : "Select deployment size"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {deploymentSizes.map((range) => (
+                  {(isHindi ? deploymentSizesHi : deploymentSizes).map((range) => (
                     <SelectItem key={range} value={range}>
                       {range}
                     </SelectItem>
@@ -242,11 +248,11 @@ export function DemoRequestDialog({
           <div className="space-y-2">
             <Label htmlFor="location" className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-muted-foreground" />
-              Location / City
+              {isHindi ? "लोकेशन / शहर" : "Location / City"}
             </Label>
             <Input
               id="location"
-              placeholder="City, State, Country"
+              placeholder={isHindi ? "शहर, राज्य, देश" : "City, State, Country"}
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
               required
@@ -255,10 +261,10 @@ export function DemoRequestDialog({
 
           {/* Message */}
           <div className="space-y-2">
-            <Label htmlFor="message">Additional Requirements (Optional)</Label>
+            <Label htmlFor="message">{isHindi ? "अतिरिक्त आवश्यकताएँ (वैकल्पिक)" : "Additional Requirements (Optional)"}</Label>
             <Textarea
               id="message"
-              placeholder="Tell us about your specific requirements..."
+              placeholder={isHindi ? "अपनी विशेष आवश्यकताएँ बताएं..." : "Tell us about your specific requirements..."}
               value={formData.message}
               onChange={(e) => setFormData({ ...formData, message: e.target.value })}
               rows={3}
@@ -284,7 +290,7 @@ export function DemoRequestDialog({
               ) : (
                 <>
                   <Send className="w-4 h-4 mr-2" />
-                  Submit Inquiry
+                  {isHindi ? "रिक्वेस्ट सबमिट करें" : "Submit Inquiry"}
                 </>
               )}
             </Button>

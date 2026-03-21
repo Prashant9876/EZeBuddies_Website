@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DemoRequestDialog } from "@/components/DemoRequestDialog";
+import { useLanguage } from "@/lib/language";
 import vatavaranPreLaunchGraphic from "@/assets/devices/Vatavaran device pre-launch graphic.png";
 
 type UseCase = {
@@ -100,6 +101,21 @@ const useCases: UseCase[] = [
   },
 ];
 
+const useCasesHi: UseCase[] = [
+  { label: "ग्रीनहाउस", image: "https://images.unsplash.com/photo-1464226184884-fa280b87c399?auto=format&fit=crop&w=900&q=80", icon: Leaf },
+  { label: "नेट हाउस", image: "https://images.unsplash.com/photo-1523741543316-beb7fc7023d8?auto=format&fit=crop&w=900&q=80", icon: Sprout },
+  { label: "वर्टिकल फार्म", image: "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=900&q=80", icon: Factory },
+  { label: "CEA फार्म", image: "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&w=900&q=80", icon: Sun },
+  { label: "हाइड्रोपोनिक्स सिस्टम", image: "https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&w=900&q=80", icon: Waves },
+  { label: "एक्वापोनिक्स सिस्टम", image: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=900&q=80", icon: Fish },
+  { label: "एग्री स्टोरेज यूनिट", image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=900&q=80", icon: Warehouse },
+  { label: "पॉलीहाउस", image: "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80", icon: CloudRain },
+  { label: "पोल्ट्री फार्म", image: "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&w=900&q=80", icon: Wind },
+  { label: "डेयरी और कैटल फार्म", image: "https://images.unsplash.com/photo-1516467508483-a7212febe31a?auto=format&fit=crop&w=900&q=80", icon: Gauge },
+  { label: "मशरूम फार्म", image: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=900&q=80", icon: FlaskConical },
+  { label: "ओपन फील्ड प्रिसिजन फार्मिंग", image: "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=900&q=80", icon: MapPin },
+];
+
 const quickBenefits = [
   { title: "Temp + Humidity + CO2", subtitle: "Live climate data", icon: Thermometer },
   { title: "Auto Ventilation Control", subtitle: "Fan/A.C. response", icon: Wind },
@@ -109,10 +125,24 @@ const quickBenefits = [
   { title: "Built for Indian Farms", subtitle: "Practical field design", icon: ShieldCheck },
 ];
 
+const quickBenefitsHi = [
+  { title: "तापमान + आर्द्रता + CO2", subtitle: "लाइव क्लाइमेट डेटा", icon: Thermometer },
+  { title: "ऑटो वेंटिलेशन कंट्रोल", subtitle: "फैन/A.C. रिस्पॉन्स", icon: Wind },
+  { title: "तुरंत अलर्ट", subtitle: "थ्रेशोल्ड और फॉल्ट अलर्ट", icon: BellRing },
+  { title: "मोबाइल और वेब डैशबोर्ड", subtitle: "कहीं से भी विजिबिलिटी", icon: MonitorSmartphone },
+  { title: "लो नेटवर्क में भी काम", subtitle: "ग्रामीण नेटवर्क के लिए", icon: Cpu },
+  { title: "भारतीय फार्म के लिए", subtitle: "प्रैक्टिकल फील्ड डिज़ाइन", icon: ShieldCheck },
+];
+
 const proofPoints = [
   "Built for Indian farm and utility conditions",
   "Simple onboarding for non-technical operators",
   "Scales from a single farm to multi-site deployments",
+];
+const proofPointsHi = [
+  "भारतीय फार्म और यूटिलिटी कंडीशन के लिए निर्मित",
+  "नॉन-टेक्निकल ऑपरेटर के लिए आसान ऑनबोर्डिंग",
+  "सिंगल साइट से मल्टी-साइट स्केल",
 ];
 
 const painPoints = [
@@ -122,6 +152,13 @@ const painPoints = [
   "High electricity costs from non-optimized operation",
   "No real-time alerts for critical environmental changes",
 ];
+const painPointsHi = [
+  "तापमान/आर्द्रता उतार-चढ़ाव से फसल नुकसान",
+  "मैनुअल मॉनिटरिंग से समय और मानवीय त्रुटि",
+  "ओवरवॉटरिंग/अंडर-वेंटिलेशन से ग्रोथ प्रभावित",
+  "नॉन-ऑप्टिमाइज़्ड ऑपरेशन से बिजली लागत अधिक",
+  "क्रिटिकल बदलाव पर रियल-टाइम अलर्ट की कमी",
+];
 
 const solutionPoints = [
   "Monitors temperature, humidity, and CO2 continuously",
@@ -129,8 +166,15 @@ const solutionPoints = [
   "Works in remote locations with practical connectivity options",
   "Mobile dashboard + instant alerts for quicker action",
 ];
+const solutionPointsHi = [
+  "तापमान, आर्द्रता और CO2 की निरंतर मॉनिटरिंग",
+  "फैन, A/C, पंप और फॉगर का ऑटो कंट्रोल",
+  "रिमोट लोकेशन के लिए प्रैक्टिकल कनेक्टिविटी",
+  "मोबाइल डैशबोर्ड और इंस्टेंट अलर्ट",
+];
 
 const directBenefits = ["Increase crop yield", "Reduce crop loss", "Save water usage", "Reduce electricity usage", "Automated climate control"];
+const directBenefitsHi = ["फसल उत्पादन बढ़े", "फसल नुकसान घटे", "पानी की बचत", "बिजली बचत", "ऑटोमेटेड क्लाइमेट कंट्रोल"];
 
 const indirectBenefits = [
   "Better decisions through data insights",
@@ -138,6 +182,13 @@ const indirectBenefits = [
   "Improved farm profitability",
   "Supports sustainable farming practices",
   "Remote monitoring from anywhere",
+];
+const indirectBenefitsHi = [
+  "डेटा के आधार पर बेहतर निर्णय",
+  "मजदूरी समय और साइट विजिट में कमी",
+  "फार्म लाभप्रदता में सुधार",
+  "सस्टेनेबल फार्मिंग को समर्थन",
+  "कहीं से भी रिमोट मॉनिटरिंग",
 ];
 
 const featurePoints = [
@@ -149,6 +200,15 @@ const featurePoints = [
   "Solar-compatible system",
   "Works in low network connectivity",
 ];
+const featurePointsHi = [
+  "रियल-टाइम मॉनिटरिंग",
+  "ऑटो ON/OFF कंट्रोल",
+  "कस्टम थ्रेशोल्ड सेटिंग",
+  "मोबाइल ऐप + अलर्ट",
+  "डेटा एनालिटिक्स डैशबोर्ड",
+  "सोलर-कम्पैटिबल सिस्टम",
+  "लो नेटवर्क कनेक्टिविटी में भी कार्य",
+];
 
 const whyChoosePoints = [
   "Built for Indian farming conditions",
@@ -157,12 +217,30 @@ const whyChoosePoints = [
   "Scalable from small farm to enterprise sites",
   "Local support and customization available",
 ];
+const whyChoosePointsHi = [
+  "भारतीय फार्मिंग कंडीशन के लिए निर्मित",
+  "नॉन-टेक टीम के लिए आसान इंस्टॉलेशन",
+  "इम्पोर्टेड सिस्टम की तुलना में किफायती",
+  "छोटे फार्म से एंटरप्राइज तक स्केलेबल",
+  "लोकल सपोर्ट और कस्टमाइजेशन उपलब्ध",
+];
 
 export default function VatavaranPreLaunch() {
+  const { language } = useLanguage();
+  const isHindi = language === "hi";
   const [interestOpen, setInterestOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [stepWidth, setStepWidth] = useState(360);
-  const sliderData = useMemo(() => [...useCases, ...useCases.slice(0, 4)], []);
+  const selectedUseCases = isHindi ? useCasesHi : useCases;
+  const selectedQuickBenefits = isHindi ? quickBenefitsHi : quickBenefits;
+  const selectedPainPoints = isHindi ? painPointsHi : painPoints;
+  const selectedSolutionPoints = isHindi ? solutionPointsHi : solutionPoints;
+  const selectedDirectBenefits = isHindi ? directBenefitsHi : directBenefits;
+  const selectedIndirectBenefits = isHindi ? indirectBenefitsHi : indirectBenefits;
+  const selectedFeaturePoints = isHindi ? featurePointsHi : featurePoints;
+  const selectedWhyChoosePoints = isHindi ? whyChoosePointsHi : whyChoosePoints;
+  const selectedProofPoints = isHindi ? proofPointsHi : proofPoints;
+  const sliderData = useMemo(() => [...selectedUseCases, ...selectedUseCases.slice(0, 4)], [selectedUseCases]);
 
   useEffect(() => {
     const setWidth = () => setStepWidth(window.innerWidth >= 768 ? 340 : 284);
@@ -173,10 +251,10 @@ export default function VatavaranPreLaunch() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % useCases.length);
+      setActiveIndex((prev) => (prev + 1) % selectedUseCases.length);
     }, 2500);
     return () => clearInterval(timer);
-  }, []);
+  }, [selectedUseCases.length]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#e8f2f9]">
@@ -193,21 +271,22 @@ export default function VatavaranPreLaunch() {
             <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="space-y-5">
               <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-white/80 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-primary shadow-sm">
                 <Rocket className="w-3.5 h-3.5" />
-                Vatavaran Monitor Pre-Launch
+                {isHindi ? "वातावरण मॉनिटर प्री-लॉन्च" : "Vatavaran Monitor Pre-Launch"}
               </span>
               <h1 className="font-display text-4xl font-bold leading-tight text-[#0d3556] md:text-5xl lg:text-6xl">
-                Automate Farm Climate.
-                <span className="block text-primary">Increase Control. Reduce Risk.</span>
+                {isHindi ? "फार्म क्लाइमेट को ऑटोमेट करें।" : "Automate Farm Climate."}
+                <span className="block text-primary">{isHindi ? "कंट्रोल बढ़ाएँ। जोखिम घटाएँ।" : "Increase Control. Reduce Risk."}</span>
               </h1>
               <p className="max-w-xl text-lg text-[#35556f]">
-                Monitor temperature, humidity, and CO2 in real time, then run fan/A.C. automation from one practical control stack.
-                Built for modern operations across farming and utility environments.
+                {isHindi
+                  ? "तापमान, आर्द्रता और CO2 को रियल टाइम में मॉनिटर करें, फिर एक प्रैक्टिकल कंट्रोल स्टैक से फैन/A.C. ऑटोमेशन चलाएँ।"
+                  : "Monitor temperature, humidity, and CO2 in real time, then run fan/A.C. automation from one practical control stack. Built for modern operations across farming and utility environments."}
               </p>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { label: "LoRa + Wi-Fi", icon: SatelliteDish },
-                  { label: "Smart Alerts", icon: BellRing },
-                  { label: "Automation Ready", icon: TimerReset },
+                  { label: isHindi ? "LoRa + Wi-Fi" : "LoRa + Wi-Fi", icon: SatelliteDish },
+                  { label: isHindi ? "स्मार्ट अलर्ट" : "Smart Alerts", icon: BellRing },
+                  { label: isHindi ? "ऑटोमेशन रेडी" : "Automation Ready", icon: TimerReset },
                 ].map((chip) => {
                   const ChipIcon = chip.icon;
                   return (
@@ -220,7 +299,7 @@ export default function VatavaranPreLaunch() {
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button size="lg" className="shadow-lg shadow-primary/25" onClick={() => setInterestOpen(true)}>
-                  Get Early Access
+                  {isHindi ? "अर्ली एक्सेस पाएं" : "Get Early Access"}
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
                 {/* <Button size="lg" variant="outline" className="bg-white/80" onClick={() => setInterestOpen(true)}>
@@ -236,7 +315,7 @@ export default function VatavaranPreLaunch() {
               className="relative overflow-hidden rounded-[1.75rem] border border-[#87c1e4] bg-white p-3 shadow-[0_24px_55px_-28px_rgba(6,67,112,0.45)]"
             >
               <div className="pointer-events-none absolute right-5 top-4 inline-flex rounded-full border border-[#8cc5e7]/70 bg-white/90 px-3 py-1 text-xs font-semibold text-[#1f587f]">
-                Launching Soon
+                {isHindi ? "जल्द लॉन्च" : "Launching Soon"}
               </div>
               <img
                 src={vatavaranPreLaunchGraphic}
@@ -255,21 +334,27 @@ export default function VatavaranPreLaunch() {
 
         <section className="grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-[#9fcae4] bg-white/90 p-5 shadow-sm md:p-6">
-            <h2 className="font-display mb-3 text-2xl font-bold text-[#0f3f63] md:text-3xl">Farming Pain Points</h2>
+            <h2 className="font-display mb-3 text-2xl font-bold text-[#0f3f63] md:text-3xl">
+              {isHindi ? "खेती की प्रमुख समस्याएँ" : "Farming Pain Points"}
+            </h2>
             <div className="space-y-2.5">
-              {painPoints.map((point) => (
+              {selectedPainPoints.map((point) => (
                 <div key={point} className="flex items-start gap-2.5 rounded-lg bg-[#f4fbff] px-3 py-2.5">
                   <CircleX className="mt-0.5 h-4 w-4 text-[#d34b4b]" />
                   <p className="text-sm text-[#2f566f]">{point}</p>
                 </div>
               ))}
             </div>
-            <p className="mt-4 text-sm font-semibold text-[#0d6ca8]">Farming should not depend on guesswork anymore.</p>
+            <p className="mt-4 text-sm font-semibold text-[#0d6ca8]">
+              {isHindi ? "अब खेती अनुमान पर नहीं, डेटा पर चलेगी।" : "Farming should not depend on guesswork anymore."}
+            </p>
           </div>
           <div className="rounded-2xl border border-[#9fcae4] bg-white/90 p-5 shadow-sm md:p-6">
-            <h2 className="font-display mb-3 text-2xl font-bold text-[#0f3f63] md:text-3xl">One Device. Full Climate Control.</h2>
+            <h2 className="font-display mb-3 text-2xl font-bold text-[#0f3f63] md:text-3xl">
+              {isHindi ? "एक डिवाइस। पूरा क्लाइमेट कंट्रोल।" : "One Device. Full Climate Control."}
+            </h2>
             <div className="space-y-2.5">
-              {solutionPoints.map((point) => (
+              {selectedSolutionPoints.map((point) => (
                 <div key={point} className="flex items-start gap-2.5 rounded-lg bg-[#f4fbff] px-3 py-2.5">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 text-[#0d6ca8]" />
                   <p className="text-sm text-[#2f566f]">{point}</p>
@@ -281,8 +366,10 @@ export default function VatavaranPreLaunch() {
 
         <section className="relative rounded-[2rem] border border-[#9fcae4] bg-white/80 p-5 shadow-[0_14px_42px_-26px_rgba(13,84,129,0.42)] md:p-7">
           <div className="mb-5">
-            <h2 className="font-display mb-2 text-3xl font-bold text-[#0f3f63] md:text-4xl">Where You Can Use It</h2>
-            <p className="text-[#3d637d]">From small farms to large agri-enterprises.</p>
+            <h2 className="font-display mb-2 text-3xl font-bold text-[#0f3f63] md:text-4xl">
+              {isHindi ? "आप इसे कहाँ उपयोग कर सकते हैं" : "Where You Can Use It"}
+            </h2>
+            <p className="text-[#3d637d]">{isHindi ? "छोटे फार्म से बड़े एग्री-एंटरप्राइज तक।" : "From small farms to large agri-enterprises."}</p>
           </div>
 
           <div className="relative h-[212px] overflow-hidden rounded-2xl md:h-[232px]">
@@ -332,7 +419,7 @@ export default function VatavaranPreLaunch() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {quickBenefits.map((item, idx) => {
+          {selectedQuickBenefits.map((item, idx) => {
             const Icon = item.icon;
             return (
               <motion.div
@@ -357,9 +444,11 @@ export default function VatavaranPreLaunch() {
 
         <section className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-[#a4cee6] bg-white/90 p-5 shadow-sm">
-            <h3 className="font-display mb-3 text-xl font-bold text-[#0f3f63] md:text-2xl">Direct Benefits</h3>
+            <h3 className="font-display mb-3 text-xl font-bold text-[#0f3f63] md:text-2xl">
+              {isHindi ? "प्रत्यक्ष लाभ" : "Direct Benefits"}
+            </h3>
             <div className="grid gap-2 sm:grid-cols-2">
-              {directBenefits.map((point) => (
+              {selectedDirectBenefits.map((point) => (
                 <div key={point} className="flex items-center gap-2 rounded-lg border border-[#d1e8f6] bg-[#f6fcff] px-3 py-2 text-sm text-[#234f6c]">
                   <CheckCircle2 className="h-4 w-4 text-[#0d6ca8]" />
                   {point}
@@ -368,9 +457,9 @@ export default function VatavaranPreLaunch() {
             </div>
           </div>
           <div className="rounded-2xl border border-[#a4cee6] bg-white/90 p-5 shadow-sm">
-            <h3 className="font-display mb-3 text-xl font-bold text-[#0f3f63] md:text-2xl">Indirect Benefits</h3>
+            <h3 className="font-display mb-3 text-xl font-bold text-[#0f3f63] md:text-2xl">{isHindi ? "अप्रत्यक्ष लाभ" : "Indirect Benefits"}</h3>
             <div className="grid gap-2 sm:grid-cols-2">
-              {indirectBenefits.map((point) => (
+              {selectedIndirectBenefits.map((point) => (
                 <div key={point} className="flex items-center gap-2 rounded-lg border border-[#d1e8f6] bg-[#f6fcff] px-3 py-2 text-sm text-[#234f6c]">
                   <BadgeCheck className="h-4 w-4 text-[#0d6ca8]" />
                   {point}
@@ -382,9 +471,9 @@ export default function VatavaranPreLaunch() {
 
         <section className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-[#9fcae4] bg-white/90 p-5 shadow-sm">
-            <h3 className="font-display mb-3 text-xl font-bold text-[#0f3f63] md:text-2xl">Features Made Simple</h3>
+            <h3 className="font-display mb-3 text-xl font-bold text-[#0f3f63] md:text-2xl">{isHindi ? "आसान फीचर्स" : "Features Made Simple"}</h3>
             <div className="grid gap-2 sm:grid-cols-2">
-              {featurePoints.map((point) => (
+              {selectedFeaturePoints.map((point) => (
                 <div key={point} className="flex items-center gap-2 rounded-lg bg-[#f3faff] px-3 py-2 text-sm text-[#2b5875]">
                   <CheckCircle2 className="h-4 w-4 text-primary" />
                   {point}
@@ -393,26 +482,28 @@ export default function VatavaranPreLaunch() {
             </div>
           </div>
           <div className="rounded-2xl border border-[#9fcae4] bg-white/90 p-5 shadow-sm">
-            <h3 className="font-display mb-3 text-xl font-bold text-[#0f3f63] md:text-2xl">Why Choose Us</h3>
+            <h3 className="font-display mb-3 text-xl font-bold text-[#0f3f63] md:text-2xl">{isHindi ? "हमें क्यों चुनें" : "Why Choose Us"}</h3>
             <div className="space-y-2">
-              {whyChoosePoints.map((point) => (
+              {selectedWhyChoosePoints.map((point) => (
                 <div key={point} className="flex items-start gap-2 rounded-lg bg-[#f3faff] px-3 py-2 text-sm text-[#2b5875]">
                   <ShieldCheck className="mt-0.5 h-4 w-4 text-[#0d6ca8]" />
                   {point}
                 </div>
               ))}
             </div>
-            <p className="mt-4 text-sm font-semibold text-[#0d6ca8]">Not just IoT. Built for real farm conditions.</p>
+            <p className="mt-4 text-sm font-semibold text-[#0d6ca8]">
+              {isHindi ? "सिर्फ IoT नहीं। असली फार्म कंडीशन के लिए बना।" : "Not just IoT. Built for real farm conditions."}
+            </p>
           </div>
         </section>
 
         <section className="rounded-[2rem] border border-[#8ac0e0] bg-gradient-to-r from-[#1a88cb] to-[#0d6ca8] p-6 text-white shadow-[0_20px_48px_-26px_rgba(5,77,124,0.55)] md:p-8">
-          <h3 className="font-display mb-2 text-2xl font-bold md:text-3xl">Early Access & Pilot Program</h3>
+          <h3 className="font-display mb-2 text-2xl font-bold md:text-3xl">{isHindi ? "अर्ली एक्सेस और पायलट प्रोग्राम" : "Early Access & Pilot Program"}</h3>
           <p className="mb-5 max-w-2xl text-white/90">
-            Limited slots are open. Register interest to get priority onboarding and pilot support.
+            {isHindi ? "सीमित स्लॉट खुले हैं। प्राथमिक ऑनबोर्डिंग और पायलट सपोर्ट के लिए रजिस्टर करें।" : "Limited slots are open. Register interest to get priority onboarding and pilot support."}
           </p>
           <div className="mb-6 grid gap-3 sm:grid-cols-3">
-            {["Limited pilot slots", "Priority support", "Early adopter pricing"].map((point, index) => (
+            {(isHindi ? ["सीमित पायलट स्लॉट", "प्राथमिक सपोर्ट", "अर्ली एडॉप्टर प्राइसिंग"] : ["Limited pilot slots", "Priority support", "Early adopter pricing"]).map((point, index) => (
               <div key={point} className="rounded-xl border border-white/35 bg-white/15 px-3 py-3 text-sm font-semibold">
                 <span className="inline-flex items-center gap-2">
                   <BadgeCheck className="h-4 w-4" />
@@ -432,7 +523,7 @@ export default function VatavaranPreLaunch() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-3">
-          {proofPoints.map((point, idx) => (
+          {selectedProofPoints.map((point, idx) => (
             <motion.div
               key={point}
               initial={{ opacity: 0, y: 10 }}
@@ -450,10 +541,14 @@ export default function VatavaranPreLaunch() {
         </section>
 
         <section className="rounded-2xl border border-[#9fcae4] bg-white/90 p-6 shadow-sm">
-          <h3 className="font-display mb-2 text-2xl font-bold text-[#0f3f63]">Built to Build Trust</h3>
-          <p className="mb-4 text-sm text-[#4c718a]">Tested in real farm environments, engineered by IoT teams, and backed by Agronomist experts.</p>
+          <h3 className="font-display mb-2 text-2xl font-bold text-[#0f3f63]">{isHindi ? "विश्वास के लिए निर्मित" : "Built to Build Trust"}</h3>
+          <p className="mb-4 text-sm text-[#4c718a]">
+            {isHindi
+              ? "वास्तविक फार्म वातावरण में परीक्षण किया गया, IoT इंजीनियर टीम द्वारा निर्मित।"
+              : "Tested in real farm environments, engineered by IoT teams, and backed by Agronomist experts."}
+          </p>
           <div className="grid gap-3 md:grid-cols-3">
-            {["Tested in real farm environments", "Built by Engineers", "Backed by Agronomist experts"].map((item) => (
+            {(isHindi ? ["वास्तविक फार्म में परीक्षण", "इंजीनियर टीम द्वारा निर्मित", "एग्रोनॉमिस्ट विशेषज्ञों का समर्थन"] : ["Tested in real farm environments", "Built by Engineers", "Backed by Agronomist experts"]).map((item) => (
               <div key={item} className="rounded-xl border border-[#c9e2f2] bg-[#f4fbff] px-4 py-3 text-sm font-semibold text-[#22506d]">
                 {item}
               </div>
@@ -464,8 +559,12 @@ export default function VatavaranPreLaunch() {
         <section className="rounded-[1.8rem] border border-[#9bc9e5] bg-white/90 p-6 shadow-[0_14px_38px_-26px_rgba(7,88,136,0.46)] md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h3 className="font-display mb-1 text-xl font-bold text-[#0f3f63] md:text-2xl">Ready to Move From Manual to Smart?</h3>
-              <p className="text-[#456881]">Contact us for demo scheduling and deployment planning.</p>
+              <h3 className="font-display mb-1 text-xl font-bold text-[#0f3f63] md:text-2xl">
+                {isHindi ? "मैनुअल से स्मार्ट की ओर बढ़ने के लिए तैयार?" : "Ready to Move From Manual to Smart?"}
+              </h3>
+              <p className="text-[#456881]">
+                {isHindi ? "डेमो और डिप्लॉयमेंट प्लानिंग के लिए हमसे संपर्क करें।" : "Contact us for demo scheduling and deployment planning."}
+              </p>
               <p className="mt-1 text-sm text-[#5c7a91]">Email: contact@ezebuddies.com | Website: www.ezebuddies.com</p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">

@@ -5,9 +5,10 @@ import { Button } from "./ui/button";
 import { FloatingLeaves } from "./FloatingLeaves";
 import { DemoRequestDialog } from "./DemoRequestDialog";
 import { ConsultationCardSection } from "./ConsultationCardSection";
+import { useLanguage } from "@/lib/language";
 import mainImage from "@/assets/devices/main_image.png";
 
-const sensorCards = [
+const sensorCardsEn = [
   { icon: "🌡️", label: "Temperature", value: "26.1°C", bg: "bg-primary/20" },
   { icon: "💧", label: "Humidity", value: "61%", bg: "bg-blue-400/20" },
   { icon: "🫧", label: "CO2", value: "812 ppm", bg: "bg-cyan-400/20" },
@@ -18,20 +19,46 @@ const sensorCards = [
   { icon: "📏", label: "Tank Level", value: "2,450 L", bg: "bg-teal-400/20" },
 ];
 
+const sensorCardsHi = [
+  { icon: "🌡️", label: "तापमान", value: "26.1°C", bg: "bg-primary/20" },
+  { icon: "💧", label: "आर्द्रता", value: "61%", bg: "bg-blue-400/20" },
+  { icon: "🫧", label: "CO2", value: "812 ppm", bg: "bg-cyan-400/20" },
+  { icon: "🌀", label: "फैन", value: "ON", bg: "bg-green-500/20" },
+  { icon: "❄️", label: "A/C", value: "AUTO", bg: "bg-indigo-400/20" },
+  { icon: "🚿", label: "सिंचाई", value: "SCHEDULED", bg: "bg-emerald-500/20" },
+  { icon: "💧", label: "पंप", value: "RUNNING", bg: "bg-sky-400/20" },
+  { icon: "📏", label: "टैंक लेवल", value: "2,450 L", bg: "bg-teal-400/20" },
+];
+
 export function HeroSection() {
+  const { language } = useLanguage();
   const [consultantDialogOpen, setConsultantDialogOpen] = useState(false);
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
 
-  const trustPoints = [
-    "Built for outdoor and industrial environments",
-    "Remote monitoring with instant alerting",
-    "Custom hardware and firmware available",
-  ];
-  const highlightStats = [
-    { label: "Core Product", value: "3+" },
-    { label: "Use-cases Covered", value: "25+" },
-    { label: "Custom Build Support", value: "End-to-End" },
-  ];
+  const isHindi = language === "hi";
+  const sensorCards = isHindi ? sensorCardsHi : sensorCardsEn;
+  const trustPoints = isHindi
+    ? [
+        "आउटडोर और इंडस्ट्रियल वातावरण के लिए निर्मित",
+        "तुरंत अलर्ट के साथ रिमोट मॉनिटरिंग",
+        "कस्टम हार्डवेयर और फर्मवेयर उपलब्ध",
+      ]
+    : [
+        "Built for outdoor and industrial environments",
+        "Remote monitoring with instant alerting",
+        "Custom hardware and firmware available",
+      ];
+  const highlightStats = isHindi
+    ? [
+        { label: "कोर प्रोडक्ट", value: "3+" },
+        { label: "कवर किए गए उपयोग", value: "25+" },
+        { label: "कस्टम सपोर्ट", value: "एंड-टू-एंड" },
+      ]
+    : [
+        { label: "Core Product", value: "3+" },
+        { label: "Use-cases Covered", value: "25+" },
+        { label: "Custom Build Support", value: "End-to-End" },
+      ];
 
   const [indexLeft, setIndexLeft] = useState(0);
   const [indexRight, setIndexRight] = useState(1);
@@ -44,7 +71,7 @@ export function HeroSection() {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [sensorCards.length]);
 
   return (
     <section id="home" className="relative min-h-screen bg-hero-gradient overflow-hidden pt-20">
@@ -72,7 +99,9 @@ export function HeroSection() {
               className="inline-flex items-center gap-2 bg-primary/10 rounded-full px-4 py-2 mb-6"
             >
               <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-              <span className="text-sm font-medium text-primary">Customer-first Industrial IoT</span>
+              <span className="text-sm font-medium text-primary">
+                {isHindi ? "कस्टमर-फर्स्ट इंडस्ट्रियल IoT" : "Customer-first Industrial IoT"}
+              </span>
             </motion.div>
 
             <motion.h1
@@ -81,8 +110,8 @@ export function HeroSection() {
               transition={{ delay: 2 }}
               className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6"
             >
-              Automate Critical Operations with
-              <span className="gradient-text"> Monitoring & Control</span>
+              {isHindi ? "महत्वपूर्ण ऑपरेशन्स को ऑटोमेट करें" : "Automate Critical Operations with"}
+              <span className="gradient-text"> {isHindi ? "मॉनिटरिंग और कंट्रोल" : "Monitoring & Control"}</span>
             </motion.h1>
 
             <motion.p
@@ -91,9 +120,9 @@ export function HeroSection() {
               transition={{ delay: 2 }}
               className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto lg:mx-0"
             >
-              We help teams reduce manual operations and prevent failures with purpose-built IoT
-              devices. Vatavaran Monitor, Smart Sinchai, and Pump Sathi give you live visibility and automation for
-              climate, irrigation, and water systems, with custom integrations when needed.
+              {isHindi
+                ? "हम आपकी टीम को मैनुअल काम कम करने और फेल्योर रोकने में मदद करते हैं। वातावारण मॉनिटर, स्मार्ट सिंचाई और पंप साथी से क्लाइमेट, सिंचाई और वाटर सिस्टम की लाइव विजिबिलिटी और ऑटोमेशन मिलता है।"
+                : "We help teams reduce manual operations and prevent failures with purpose-built IoT devices. Vatavaran Monitor, Smart Sinchai, and Pump Sathi give you live visibility and automation for climate, irrigation, and water systems, with custom integrations when needed."}
             </motion.p>
 
             <motion.div
@@ -131,18 +160,18 @@ export function HeroSection() {
               className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
             >
               <Button variant="hero" size="xl" className="group" onClick={() => setConsultantDialogOpen(true)}>
-                Talk to Our IoT Consultant
+                {isHindi ? "हमारे IoT कंसल्टेंट से बात करें" : "Talk to Our IoT Consultant"}
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
               <Button variant="glass" size="xl" className="group" asChild>
                 <a href="#products">
                   <Play className="w-5 h-5" />
-                  Explore Solution
+                  {isHindi ? "सॉल्यूशन देखें" : "Explore Solution"}
                 </a>
               </Button>
               <Button variant="outline" size="xl" className="group" onClick={() => setQuoteDialogOpen(true)}>
                 <ShieldCheck className="w-5 h-5" />
-                Request Custom Solution
+                {isHindi ? "कस्टम सॉल्यूशन रिक्वेस्ट करें" : "Request Custom Solution"}
               </Button>
             </motion.div>
           </motion.div>

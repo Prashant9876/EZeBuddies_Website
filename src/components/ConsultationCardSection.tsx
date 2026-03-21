@@ -8,6 +8,7 @@ import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { submitCustomerData } from "@/lib/customerDataApi";
+import { useLanguage } from "@/lib/language";
 
 interface ConsultationCardSectionProps {
   open: boolean;
@@ -20,6 +21,8 @@ export function ConsultationCardSection({
   onOpenChange,
   requestFor = "CONSULTATION_REQUEST",
 }: ConsultationCardSectionProps) {
+  const { language } = useLanguage();
+  const isHindi = language === "hi";
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -61,8 +64,8 @@ export function ConsultationCardSection({
       }
 
       toast({
-        title: "Consultation Request Sent",
-        description: "Our team will contact you shortly.",
+        title: isHindi ? "रिक्वेस्ट भेजी गई" : "Consultation Request Sent",
+        description: isHindi ? "हमारी टीम जल्द आपसे संपर्क करेगी।" : "Our team will contact you shortly.",
       });
       setFormData({
         name: "",
@@ -75,8 +78,8 @@ export function ConsultationCardSection({
     } catch (error) {
       console.error("Consultation request failed:", error);
       toast({
-        title: "Unable to Submit",
-        description: "Please try again in a moment.",
+        title: isHindi ? "सबमिट नहीं हो पाया" : "Unable to Submit",
+        description: isHindi ? "कृपया थोड़ी देर बाद फिर प्रयास करें।" : "Please try again in a moment.",
         variant: "destructive",
       });
     } finally {
@@ -88,9 +91,11 @@ export function ConsultationCardSection({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl">Talk to Our IoT Consultant</DialogTitle>
+          <DialogTitle className="font-display text-2xl">{isHindi ? "हमारे IoT कंसल्टेंट से बात करें" : "Talk to Our IoT Consultant"}</DialogTitle>
           <DialogDescription>
-            Share your requirement and we will recommend the right product stack and deployment plan.
+            {isHindi
+              ? "अपनी आवश्यकता साझा करें, हम सही प्रोडक्ट स्टैक और डिप्लॉयमेंट प्लान सुझाएंगे।"
+              : "Share your requirement and we will recommend the right product stack and deployment plan."}
           </DialogDescription>
         </DialogHeader>
 
@@ -99,27 +104,27 @@ export function ConsultationCardSection({
             <div className="space-y-2">
               <Label htmlFor="consult-name" className="flex items-center gap-2">
                 <User className="w-4 h-4 text-muted-foreground" />
-                Full Name
+                {isHindi ? "पूरा नाम" : "Full Name"}
               </Label>
               <Input
                 id="consult-name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Your name"
+                placeholder={isHindi ? "आपका नाम" : "Your name"}
                 required
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="consult-email" className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-muted-foreground" />
-                Email
+                {isHindi ? "ईमेल" : "Email"}
               </Label>
               <Input
                 id="consult-email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="you@company.com"
+                placeholder={isHindi ? "you@company.com" : "you@company.com"}
                 required
               />
             </div>
@@ -129,7 +134,7 @@ export function ConsultationCardSection({
             <div className="space-y-2">
               <Label htmlFor="consult-phone" className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-muted-foreground" />
-                Phone Number
+                {isHindi ? "फोन नंबर" : "Phone Number"}
               </Label>
               <Input
                 id="consult-phone"
@@ -143,13 +148,13 @@ export function ConsultationCardSection({
             <div className="space-y-2">
               <Label htmlFor="consult-company" className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-muted-foreground" />
-                Company / Site
+                {isHindi ? "कंपनी / साइट" : "Company / Site"}
               </Label>
               <Input
                 id="consult-company"
                 value={formData.company}
                 onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                placeholder="Company name or location"
+                placeholder={isHindi ? "कंपनी का नाम या लोकेशन" : "Company name or location"}
               />
             </div>
           </div>
@@ -157,13 +162,13 @@ export function ConsultationCardSection({
           <div className="space-y-2">
             <Label htmlFor="consult-query" className="flex items-center gap-2">
               <MessageSquareMore className="w-4 h-4 text-muted-foreground" />
-              Query / Requirement
+              {isHindi ? "प्रश्न / आवश्यकता" : "Query / Requirement"}
             </Label>
             <Textarea
               id="consult-query"
               value={formData.query}
               onChange={(e) => setFormData({ ...formData, query: e.target.value })}
-              placeholder="Tell us what you want to automate and where."
+              placeholder={isHindi ? "बताइए क्या ऑटोमेट करना है और कहाँ।" : "Tell us what you want to automate and where."}
               rows={5}
               required
             />
@@ -171,11 +176,11 @@ export function ConsultationCardSection({
 
           <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? (
-              "Submitting..."
+              isHindi ? "सबमिट हो रहा है..." : "Submitting..."
             ) : (
               <>
                 <Send className="w-4 h-4 mr-2" />
-                Book Consultant
+                {isHindi ? "कंसल्टेंट बुक करें" : "Book Consultant"}
               </>
             )}
           </Button>
