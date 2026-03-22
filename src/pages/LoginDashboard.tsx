@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useLanguage } from "@/lib/language";
+import { applySeo } from "@/lib/seo";
 
 type Device = {
   device_id: string;
@@ -277,6 +278,15 @@ export default function LoginDashboard() {
       navigate("/");
     }
   }, [token, loginResponse, navigate]);
+
+  useEffect(() => {
+    applySeo({
+      title: "Dashboard | EzeBuddies",
+      description: "Authorized dashboard for device telemetry and controls.",
+      path: "/dashboard",
+      robots: "noindex, nofollow",
+    });
+  }, []);
 
   const refreshRealtimeData = useCallback(async () => {
     if (!token || !userId) return;

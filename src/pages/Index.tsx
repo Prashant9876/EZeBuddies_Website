@@ -17,16 +17,33 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Rocket } from "lucide-react";
 import vatavaranPreLaunchGraphic from "@/assets/devices/prelauch.png";
 import { useLanguage } from "@/lib/language";
+import { applySeo } from "@/lib/seo";
 
 const Index = () => {
   const [preLaunchOpen, setPreLaunchOpen] = useState(false);
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   useEffect(() => {
     const timer = setTimeout(() => setPreLaunchOpen(true), 500);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    applySeo({
+      title:
+        language === "hi"
+          ? "EzeBuddies | IoT ऑटोमेशन डिवाइस"
+          : "EzeBuddies | IoT Automation Devices for Monitoring and Control",
+      description:
+        language === "hi"
+          ? "क्लाइमेट, सिंचाई और वाटर कंट्रोल के लिए EzeBuddies के IoT समाधान।"
+          : "Deploy Vatavaran Monitor, Smart Sinchai, and Pump Sathi for climate, irrigation, and water automation.",
+      path: "/",
+      robots: "index, follow",
+    });
+  }, [language]);
 
   const handleInterested = () => {
     setPreLaunchOpen(false);

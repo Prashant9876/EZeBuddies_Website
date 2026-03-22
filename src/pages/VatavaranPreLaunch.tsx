@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DemoRequestDialog } from "@/components/DemoRequestDialog";
 import { useLanguage } from "@/lib/language";
+import { applySeo } from "@/lib/seo";
 import vatavaranPreLaunchGraphic from "@/assets/devices/Vatavaran device pre-launch graphic.png";
 
 type UseCase = {
@@ -241,6 +242,22 @@ export default function VatavaranPreLaunch() {
   const selectedWhyChoosePoints = isHindi ? whyChoosePointsHi : whyChoosePoints;
   const selectedProofPoints = isHindi ? proofPointsHi : proofPoints;
   const sliderData = useMemo(() => [...selectedUseCases, ...selectedUseCases.slice(0, 4)], [selectedUseCases]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    applySeo({
+      title:
+        isHindi
+          ? "वातावरण मॉनिटर | प्री-लॉन्च | EzeBuddies"
+          : "Vatavaran Monitor Pre-Launch | Climate Control Device | EzeBuddies",
+      description:
+        isHindi
+          ? "तापमान, आर्द्रता और CO2 मॉनिटरिंग के साथ स्मार्ट क्लाइमेट कंट्रोल डिवाइस।"
+          : "Vatavaran Monitor for temperature, humidity and CO2 monitoring with automation-ready climate control.",
+      path: "/pre-launch/vatavaran-monitor",
+      robots: "index, follow",
+    });
+  }, [isHindi, language]);
 
   useEffect(() => {
     const setWidth = () => setStepWidth(window.innerWidth >= 768 ? 340 : 284);
