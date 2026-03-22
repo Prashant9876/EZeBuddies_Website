@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Gauge, Thermometer, Droplets, Leaf, Cpu, ToggleLeft, RefreshCw, Menu, X } from "lucide-react";
+import { Gauge, Thermometer, Droplets, Leaf, Cpu, ToggleLeft, RefreshCw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { clearStoredAuth, getStoredAuthToken, getStoredLoginResponse } from "@/lib/auth";
 import { Switch } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { motion, AnimatePresence } from "framer-motion";
-import { LanguageSelector } from "@/components/LanguageSelector";
+import { motion } from "framer-motion";
 import { useLanguage } from "@/lib/language";
 import { applySeo } from "@/lib/seo";
 
@@ -17,6 +17,11 @@ type Device = {
   device_type: string;
   is_active: boolean;
   deployed_at?: string;
+};
+
+type SolutionGroup = {
+  solution_name: string;
+  devices: Device[];
 };
 
 function asNonEmptyString(value: unknown) {
@@ -36,18 +41,7 @@ function asBoolean(value: unknown) {
   return null;
 }
 
-function getDevices(response: Record<string, unknown> | null): Device[] {
-  const rootList = response?.devices;
-  const userList =
-    response?.user && typeof response.user === "object" && !Array.isArray(response.user)
-      ? (response.user as Record<string, unknown>).devices
-      : undefined;
-  const dataList =
-    response?.data && typeof response.data === "object" && !Array.isArray(response.data)
-      ? (response.data as Record<string, unknown>).devices
-      : undefined;
-
-  const list = Array.isArray(rootList) ? rootList : Array.isArray(userList) ? userList : dataList;
+function parseDeviceList(list: unknown): Device[] {
   if (!Array.isArray(list)) return [];
 
   return list
@@ -76,6 +70,51 @@ function getDevices(response: Record<string, unknown> | null): Device[] {
       } satisfies Device;
     })
     .filter((item): item is Device => Boolean(item));
+}
+
+function getDevices(response: Record<string, unknown> | null): Device[] {
+  const rootList = response?.devices;
+  const userList =
+    response?.user && typeof response.user === "object" && !Array.isArray(response.user)
+      ? (response.user as Record<string, unknown>).devices
+      : undefined;
+  const dataList =
+    response?.data && typeof response.data === "object" && !Array.isArray(response.data)
+      ? (response.data as Record<string, unknown>).devices
+      : undefined;
+
+  const list = Array.isArray(rootList) ? rootList : Array.isArray(userList) ? userList : dataList;
+  return parseDeviceList(list);
+}
+
+function getSolutions(response: Record<string, unknown> | null): SolutionGroup[] {
+  const rootSolutions = response?.solutions;
+  const userSolutions =
+    response?.user && typeof response.user === "object" && !Array.isArray(response.user)
+      ? (response.user as Record<string, unknown>).solutions
+      : undefined;
+  const dataSolutions =
+    response?.data && typeof response.data === "object" && !Array.isArray(response.data)
+      ? (response.data as Record<string, unknown>).solutions
+      : undefined;
+
+  const source = Array.isArray(rootSolutions) ? rootSolutions : Array.isArray(userSolutions) ? userSolutions : dataSolutions;
+  if (!Array.isArray(source)) return [];
+
+  return source
+    .map((value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+      const obj = value as Record<string, unknown>;
+      const solutionName =
+        asNonEmptyString(obj.solution_name) ??
+        asNonEmptyString(obj.solutionName) ??
+        asNonEmptyString(obj.Solution_Name) ??
+        asNonEmptyString(obj.SolutionName);
+      const devices = parseDeviceList(obj.devices);
+      if (!solutionName || devices.length === 0) return null;
+      return { solution_name: solutionName, devices } satisfies SolutionGroup;
+    })
+    .filter((item): item is SolutionGroup => Boolean(item));
 }
 
 function seedFromString(input: string) {
@@ -143,41 +182,112 @@ function formatRelayName(key: string) {
   return key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function EnvironmentControlCard({ device, realtime, t }: { device: Device; realtime?: RealtimeRecord; t: TranslateFn }) {
-  const channels = useMemo(() => {
-    if (realtime) {
-      const items = Object.entries(realtime)
-        .filter(([key]) => !isMetadataKey(key))
-        .map(([key, value]) => ({
-          name: key,
-          enabled: toSwitchState(value),
-        }));
-      if (items.length > 0) {
-        return items;
-      }
+function toModeState(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1" || normalized === "auto" || normalized === "on") return true;
+    if (normalized === "false" || normalized === "0" || normalized === "manual" || normalized === "off") return false;
+  }
+  return false;
+}
+
+function buildActuatorChannels(deviceId: string, realtime?: RealtimeRecord) {
+  if (realtime) {
+    const items = Object.entries(realtime)
+      .filter(([key]) => !isMetadataKey(key))
+      .map(([key, value]) => ({
+        name: key,
+        enabled: toSwitchState(value),
+      }));
+    if (items.length > 0) {
+      return items;
+    }
+  }
+
+  return Array.from({ length: 8 }, (_, i) => ({
+    name: `relay_${i + 1}`,
+    enabled: randomFromSeed(seedFromString(`${deviceId}-${i}`)) > 0.5,
+  }));
+}
+
+function EnvironmentControlCard({
+  device,
+  realtime,
+  t,
+  estopActive,
+}: {
+  device: Device;
+  realtime?: RealtimeRecord;
+  t: TranslateFn;
+  estopActive?: boolean;
+}) {
+  const { toast } = useToast();
+  const initialChannels = useMemo(() => buildActuatorChannels(device.device_id, realtime), [device.device_id, realtime]);
+  const initialMode = useMemo(() => toModeState(realtime?.Mode ?? realtime?.mode ?? realtime?.MODE), [realtime]);
+  const [channels, setChannels] = useState(initialChannels);
+  const [isAutoMode, setIsAutoMode] = useState(initialMode);
+
+  useEffect(() => {
+    setChannels(initialChannels);
+  }, [initialChannels]);
+
+  useEffect(() => {
+    setIsAutoMode(initialMode);
+  }, [initialMode]);
+
+  useEffect(() => {
+    if (!estopActive) return;
+    setChannels((prev) => prev.map((item) => ({ ...item, enabled: false })));
+  }, [estopActive]);
+
+  const handleChannelToggle = (index: number, next: boolean) => {
+    if (estopActive) {
+      toast({
+        title: t("dashboard.estopActiveTitle"),
+        description: t("dashboard.estopActiveDescription"),
+        variant: "destructive",
+      });
+      return;
     }
 
-    return Array.from({ length: 8 }, (_, i) => ({
-      name: `relay_${i + 1}`,
-      enabled: randomFromSeed(seedFromString(`${device.device_id}-${i}`)) > 0.5,
-    }));
-  }, [device.device_id, realtime]);
+    if (isAutoMode) {
+      toast({
+        title: t("dashboard.manualModeRequiredTitle"),
+        description: t("dashboard.manualModeRequiredDescription"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setChannels((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, enabled: next } : item)));
+  };
 
   return (
-    <Card className="overflow-hidden border-cyan-200/70 shadow-[0_14px_40px_-20px_rgba(0,140,170,0.6)]">
+    <Card className="hover-lift overflow-hidden border-cyan-200/70 shadow-[0_14px_40px_-20px_rgba(0,140,170,0.6)]">
       <div className="bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-4 text-white">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-white/80">{t("dashboard.actuator")}</p>
             <h3 className="font-display text-xl font-semibold">{device.device_name}</h3>
           </div>
-          <Cpu className="h-6 w-6" />
+          <div className="flex flex-col items-end gap-2">
+            <Cpu className="h-6 w-6" />
+            <div className="inline-flex items-center gap-2 text-[11px]">
+              <span className="font-bold">{t("dashboard.mode")}</span>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-2 py-1 font-semibold">
+                <Switch checked={isAutoMode} onCheckedChange={setIsAutoMode} />
+                <span>{isAutoMode ? t("dashboard.auto") : t("dashboard.manual")}</span>
+              </div>
+            </div>
+          </div>
         </div>
         <p className="mt-2 text-xs text-white/85">{t("dashboard.deviceId")}: {device.device_id}</p>
       </div>
       <CardContent className="p-5">
         <div className="mb-4 flex items-center justify-between rounded-xl border border-cyan-100 bg-cyan-50/70 px-3 py-2">
-          <span className="text-sm font-medium text-cyan-700">{t("dashboard.relayBoard")}</span>
+          <span className="text-sm font-medium text-cyan-700">{t("dashboard.smartFarmController")}</span>
           <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-cyan-700">
             {channels.filter((item) => item.enabled).length}/{channels.length} ON
           </span>
@@ -186,7 +296,10 @@ function EnvironmentControlCard({ device, realtime, t }: { device: Device; realt
           {channels.map((channel, index) => (
             <div key={`${device.device_id}-${channel.name}-${index}`} className="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2">
               <span className="text-sm font-medium text-foreground">{formatRelayName(channel.name)}</span>
-              <Switch checked={channel.enabled} disabled />
+              <Switch
+                checked={channel.enabled}
+                onCheckedChange={(next) => handleChannelToggle(index, next)}
+              />
             </div>
           ))}
         </div>
@@ -203,7 +316,7 @@ function EnvironmentIntelCard({ device, realtime, t }: { device: Device; realtim
   const deployedAt = device.deployed_at?.trim() || t("dashboard.notSpecified");
 
   return (
-    <Card className="overflow-hidden border-emerald-200/70 shadow-[0_14px_40px_-20px_rgba(16,150,87,0.6)]">
+    <Card className="hover-lift overflow-hidden border-emerald-200/70 shadow-[0_14px_40px_-20px_rgba(16,150,87,0.6)]">
       <div className="bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-4 text-white">
         <div className="flex items-center justify-between">
           <div>
@@ -244,30 +357,71 @@ function EnvironmentIntelCard({ device, realtime, t }: { device: Device; realtim
   );
 }
 
+function IrrigationIntelCard({ device, realtime, t }: { device: Device; realtime?: RealtimeRecord; t: TranslateFn }) {
+  const baseSeed = seedFromString(device.device_id);
+  const soilMoisture = toMetric(
+    realtime?.Soil_Moisture ?? realtime?.soil_moisture ?? realtime?.SoilMoisture ?? realtime?.SM,
+    metricFromSeed(baseSeed + 11, 25, 75),
+  );
+  const soilTemperature = toMetric(
+    realtime?.Soil_Temperature ?? realtime?.soil_temperature ?? realtime?.SoilTemperature ?? realtime?.Stemp,
+    metricFromSeed(baseSeed + 12, 18, 35),
+  );
+  const deployedAt = device.deployed_at?.trim() || t("dashboard.notSpecified");
+
+  return (
+    <Card className="hover-lift overflow-hidden border-amber-200/70 shadow-[0_14px_40px_-20px_rgba(180,120,30,0.55)]">
+      <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-4 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-white/80">{t("dashboard.sensor")}</p>
+            <h3 className="font-display text-lg font-semibold text-white/95">{device.device_name}</h3>
+            <p className="mt-1 rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold text-white">
+              {t("dashboard.deployedAt")}: {deployedAt}
+            </p>
+          </div>
+          <Gauge className="h-6 w-6" />
+        </div>
+        <p className="mt-2 text-xs text-white/85">{t("dashboard.deviceId")}: {device.device_id}</p>
+      </div>
+      <CardContent className="grid grid-cols-1 gap-3 p-5">
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 p-3">
+          <div className="mb-1 flex items-center gap-2 text-emerald-700">
+            <Droplets className="h-4 w-4" />
+            <span className="text-sm font-medium">{t("dashboard.soilMoisture")}</span>
+          </div>
+          <p className="text-2xl font-semibold text-emerald-900">{soilMoisture}%</p>
+        </div>
+        <div className="rounded-xl border border-orange-100 bg-orange-50/80 p-3">
+          <div className="mb-1 flex items-center gap-2 text-orange-700">
+            <Thermometer className="h-4 w-4" />
+            <span className="text-sm font-medium">{t("dashboard.soilTemperature")}</span>
+          </div>
+          <p className="text-2xl font-semibold text-orange-900">{soilTemperature}°C</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function LoginDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useLanguage();
-  const loginResponse = getStoredLoginResponse();
-  const token = getStoredAuthToken();
-  const devices = getDevices(loginResponse);
+  const loginResponse = useMemo(() => getStoredLoginResponse(), []);
+  const token = useMemo(() => getStoredAuthToken(), []);
+  const solutionGroups = getSolutions(loginResponse);
+  const devices = useMemo(
+    () => (solutionGroups.length > 0 ? solutionGroups.flatMap((solution) => solution.devices) : getDevices(loginResponse)),
+    [solutionGroups, loginResponse],
+  );
   const userId = typeof loginResponse?.user_id === "string" ? loginResponse.user_id : null;
   const [realtimeData, setRealtimeData] = useState<Record<string, RealtimeRecord>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isNavOpen, setIsNavOpen] = useState(false);
-  const sensorDevices = useMemo(
-    () => devices.filter((device) => device.device_type.toLowerCase() === "sensors"),
-    [devices],
-  );
-  const actuatorDevices = useMemo(
-    () => devices.filter((device) => device.device_type.toLowerCase() === "actuators"),
-    [devices],
-  );
+  const [isEStopDialogOpen, setIsEStopDialogOpen] = useState(false);
+  const [selectedSolutionForEStop, setSelectedSolutionForEStop] = useState<string | null>(null);
+  const [estopSolutions, setEstopSolutions] = useState<Record<string, boolean>>({});
   const quantityByName = useMemo(() => buildDeviceCounts(devices), [devices]);
-  const userName = typeof loginResponse?.name === "string" ? loginResponse.name : "User";
-  const userEmail = typeof loginResponse?.email === "string" ? loginResponse.email : t("dashboard.notAvailable");
-  const userIdLabel = typeof loginResponse?.user_id === "string" ? loginResponse.user_id : t("dashboard.notAvailable");
-
   const handleLogout = () => {
     clearStoredAuth();
     navigate("/");
@@ -337,69 +491,104 @@ export default function LoginDashboard() {
     return () => clearInterval(interval);
   }, [token, userId, refreshRealtimeData]);
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#ecf8ff] via-[#f7fcff] to-[#ffffff] py-12 px-6">
-      <AnimatePresence>
-        {isNavOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-slate-900/45 backdrop-blur-[2px]"
-              onClick={() => setIsNavOpen(false)}
-            />
-            <motion.aside
-              initial={{ x: -320 }}
-              animate={{ x: 0 }}
-              exit={{ x: -320 }}
-              transition={{ type: "spring", stiffness: 260, damping: 28 }}
-              className="fixed left-0 top-0 z-50 h-screen w-[300px] border-r border-sky-200/60 bg-white shadow-2xl"
-            >
-              <div className="bg-gradient-to-br from-sky-600 via-cyan-600 to-blue-700 px-5 py-6 text-white">
-                <div className="mb-4 flex items-center justify-between">
-                  <p className="text-xs uppercase tracking-[0.2em] text-white/75">{t("dashboard.navTitle")}</p>
-                  <button
-                    type="button"
-                    onClick={() => setIsNavOpen(false)}
-                    className="rounded-lg bg-white/15 p-1.5 text-white hover:bg-white/25"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <h2 className="font-display text-2xl font-semibold">{t("dashboard.welcome", { name: userName })}</h2>
-                <p className="mt-1 text-sm text-white/85 break-all">{userEmail}</p>
-                <p className="mt-2 inline-flex rounded-full bg-white/15 px-3 py-1 text-xs">{userIdLabel}</p>
-              </div>
-              <div className="space-y-4 p-5">
-                <LanguageSelector />
-                <div className="space-y-2">
-                  <Button variant="destructive" className="w-full" onClick={handleLogout}>
-                    {t("dashboard.logout")}
-                  </Button>
-                </div>
-              </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+  const renderDeviceCard = (device: Device) => {
+    const normalizedName = device.device_name.toLowerCase();
+    const realtime = realtimeData[device.device_id];
+    if (normalizedName.includes("enviroment_intel")) {
+      return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+    }
+    if (normalizedName.includes("enviroment_control")) {
+      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+    }
+    if (normalizedName.includes("irrigation_intel")) {
+      return <IrrigationIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+    }
+    if (normalizedName.includes("irrigation_control")) {
+      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+    }
 
-      <div className="max-w-7xl mx-auto">
+    return (
+      <Card key={device.device_id} className="hover-lift border-border/70">
+        <CardHeader>
+          <CardTitle>{device.device_name}</CardTitle>
+          <CardDescription>
+            {device.device_type} | ID: {device.device_id}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full border px-3 py-1">
+            <ToggleLeft className="h-4 w-4" />
+            {device.is_active ? t("dashboard.active") : t("dashboard.inactive")}
+          </div>
+          <p>{t("dashboard.customUiHint")}</p>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderDeviceCardForSolution = (solutionName: string, device: Device) => {
+    const estopActive = Boolean(estopSolutions[solutionName]);
+    const normalizedName = device.device_name.toLowerCase();
+    const realtime = realtimeData[device.device_id];
+
+    if (normalizedName.includes("enviroment_intel")) {
+      return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+    }
+    if (normalizedName.includes("enviroment_control")) {
+      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} estopActive={estopActive} />;
+    }
+    if (normalizedName.includes("irrigation_intel")) {
+      return <IrrigationIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+    }
+    if (normalizedName.includes("irrigation_control")) {
+      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} estopActive={estopActive} />;
+    }
+
+    return renderDeviceCard(device);
+  };
+
+  const handleOpenEStopDialog = (solutionName: string) => {
+    setSelectedSolutionForEStop(solutionName);
+    setIsEStopDialogOpen(true);
+  };
+
+  const handleConfirmEStop = () => {
+    if (!selectedSolutionForEStop) return;
+    setEstopSolutions((prev) => ({ ...prev, [selectedSolutionForEStop]: true }));
+    toast({
+      title: t("dashboard.estopEnabledTitle"),
+      description: t("dashboard.estopEnabledDescription", { solution: selectedSolutionForEStop }),
+      variant: "destructive",
+    });
+    setIsEStopDialogOpen(false);
+    setSelectedSolutionForEStop(null);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="mx-auto max-w-7xl">
         <motion.main
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: "easeOut", delay: 0.05 }}
           className="space-y-6"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" onClick={() => setIsNavOpen(true)} aria-label={t("dashboard.navTitle")}>
-                <Menu className="h-5 w-5" />
-              </Button>
-              <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">{t("dashboard.title")}</h1>
+          <div className="rounded-2xl border border-sky-200/70 bg-gradient-to-r from-white via-sky-50/70 to-cyan-50/70 p-4 shadow-[0_15px_35px_-24px_rgba(2,80,130,0.6)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-sky-700/80">Realtime Operations</p>
+                <p className="mt-1 text-sm text-slate-600">Monitor live telemetry and control your farm devices in one place.</p>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-800">
+                <Sparkles className="h-3.5 w-3.5" />
+                Smart IoT View
+              </div>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">{t("dashboard.title")}</h1>
             <div className="flex items-center gap-2">
-              <LanguageSelector />
               <Button variant="outline" onClick={refreshRealtimeData}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                 {isRefreshing ? t("dashboard.refreshing") : t("dashboard.refreshNow")}
@@ -410,7 +599,7 @@ export default function LoginDashboard() {
             </div>
           </div>
 
-          <Card>
+          <Card className="hover-lift border-sky-200/60">
             <CardHeader>
               <CardTitle>{t("dashboard.deviceSummaryTitle")}</CardTitle>
               <CardDescription>{t("dashboard.deviceSummaryDescription")}</CardDescription>
@@ -420,7 +609,7 @@ export default function LoginDashboard() {
                 <p className="text-sm text-muted-foreground">{t("dashboard.noDevices")}</p>
               )}
               {Object.entries(quantityByName).map(([name, count]) => (
-                <div key={name} className="rounded-xl border border-border bg-muted/30 p-3">
+                <div key={name} className="rounded-xl border border-border bg-muted/30 p-3 transition hover:-translate-y-0.5 hover:border-sky-300/70 hover:bg-sky-50/70">
                   <p className="text-sm text-muted-foreground"></p>
                   <p className="font-semibold text-foreground">{name}</p>
                   <p className="mt-1 text-sm">
@@ -431,38 +620,74 @@ export default function LoginDashboard() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-5 md:grid-cols-2">
-            {devices.map((device) => {
-              const normalizedName = device.device_name.toLowerCase();
-              const realtime = realtimeData[device.device_id];
-              if (normalizedName.includes("enviroment_intel")) {
-                return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
-              }
-              if (normalizedName.includes("enviroment_control")) {
-                return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} />;
-              }
+          {solutionGroups.length > 0 ? (
+            solutionGroups.map((solution) => {
+              const sensorDevices = solution.devices.filter((device) => device.device_type.toLowerCase() === "sensors");
+              const actuatorDevices = solution.devices.filter((device) => device.device_type.toLowerCase() === "actuators");
+              const otherDevices = solution.devices.filter((device) => {
+                const type = device.device_type.toLowerCase();
+                return type !== "sensors" && type !== "actuators";
+              });
 
               return (
-                <Card key={device.device_id} className="border-border/70">
-                  <CardHeader>
-                    <CardTitle>{device.device_name}</CardTitle>
-                    <CardDescription>
-                      {device.device_type} | ID: {device.device_id}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border px-3 py-1">
-                      <ToggleLeft className="h-4 w-4" />
-                      {device.is_active ? "Active" : "Inactive"}
+                <motion.section
+                  key={solution.solution_name}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="space-y-4 rounded-2xl border border-border/60 bg-card/40 p-4 shadow-[0_14px_38px_-26px_rgba(3,95,140,0.55)] md:p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="font-display text-2xl font-semibold text-foreground">{solution.solution_name}</h2>
+                    <Button variant="destructive" size="sm" onClick={() => handleOpenEStopDialog(solution.solution_name)}>
+                      E-Stop
+                    </Button>
+                  </div>
+
+                  {sensorDevices.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-lg font-semibold text-foreground">{t("dashboard.sensor")}</h3>
+                      <div className="grid gap-5 md:grid-cols-2">{sensorDevices.map((device) => renderDeviceCardForSolution(solution.solution_name, device))}</div>
                     </div>
-                    <p>Custom UI for this device type can be added next.</p>
-                  </CardContent>
-                </Card>
+                  )}
+
+                  {actuatorDevices.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-lg font-semibold text-foreground">{t("dashboard.actuator")}</h3>
+                      <div className="grid gap-5 md:grid-cols-2">{actuatorDevices.map((device) => renderDeviceCardForSolution(solution.solution_name, device))}</div>
+                    </div>
+                  )}
+
+                  {otherDevices.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-lg font-semibold text-foreground">{t("dashboard.otherDevices")}</h3>
+                      <div className="grid gap-5 md:grid-cols-2">{otherDevices.map((device) => renderDeviceCardForSolution(solution.solution_name, device))}</div>
+                    </div>
+                  )}
+                </motion.section>
               );
-            })}
-          </div>
+            })
+          ) : (
+            <section className="space-y-3">
+              <h2 className="text-xl font-semibold text-foreground">{t("dashboard.devices")}</h2>
+              <div className="grid gap-5 md:grid-cols-2">{devices.map(renderDeviceCard)}</div>
+            </section>
+          )}
         </motion.main>
       </div>
+
+      <Dialog open={isEStopDialogOpen} onOpenChange={setIsEStopDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">{t("dashboard.estopDialogTitle")}</DialogTitle>
+            <DialogDescription className="sr-only">Emergency stop confirmation</DialogDescription>
+          </DialogHeader>
+          <p className="text-sm font-bold text-foreground">{t("dashboard.estopDialogMessage")}</p>
+          <Button variant="destructive" className="w-full" onClick={handleConfirmEStop}>
+            {t("dashboard.stop")}
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
