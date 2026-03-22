@@ -593,9 +593,6 @@ export default function LoginDashboard() {
                 <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                 {isRefreshing ? t("dashboard.refreshing") : t("dashboard.refreshNow")}
               </Button>
-              <Button variant="destructive" onClick={handleLogout}>
-                {t("dashboard.logout")}
-              </Button>
             </div>
           </div>
 

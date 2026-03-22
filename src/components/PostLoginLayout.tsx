@@ -188,9 +188,14 @@ export function PostLoginLayout() {
                 </div>
               </div>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50/80 px-5 py-2.5 text-base font-semibold text-sky-800">
-              <Sparkles className="h-4 w-4" />
-              {pageTitle}
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50/80 px-5 py-2.5 text-base font-semibold text-sky-800">
+                <Sparkles className="h-4 w-4" />
+                {pageTitle}
+              </div>
+              <Button variant="destructive" className="rounded-full px-5" onClick={handleLogout}>
+                {t("dashboard.logout")}
+              </Button>
             </div>
           </div>
         </motion.header>
