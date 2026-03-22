@@ -501,7 +501,7 @@ function ProductCard({
 
           <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
             <span className="text-[10px] tracking-wide uppercase font-semibold px-3 py-1 rounded-full bg-white/85 text-slate-800 border border-white/80">
-              {isHindi ? "डिप्लॉयमेंट रेडी" : "Ready to Deploy"}
+              {isHindi ? "डिप्लॉयमेंट बीटा" : "Beta Deployment"}
             </span>
             <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${product.heroGradient} flex items-center justify-center shadow-lg`}>
               <Icon className="w-5 h-5 text-white" />
