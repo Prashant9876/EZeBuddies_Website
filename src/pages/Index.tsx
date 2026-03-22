@@ -11,6 +11,7 @@ import { Footer } from "@/components/Footer";
 import { CustomerUseCasesSection } from "@/components/CustomerUseCasesSection";
 import { TestimonialsCaseStudiesSection } from "@/components/TestimonialsCaseStudiesSection";
 import { FaqSection } from "@/components/FaqSection";
+import { SeoContentSection } from "@/components/SeoContentSection";
 import { StickyMobileCta } from "@/components/StickyMobileCta";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -35,11 +36,11 @@ const Index = () => {
       title:
         language === "hi"
           ? "EzeBuddies | IoT ऑटोमेशन डिवाइस"
-          : "EzeBuddies | IoT Automation Devices for Monitoring and Control",
+          : "EzeBuddies | Industrial IoT Monitoring & Control",
       description:
         language === "hi"
           ? "क्लाइमेट, सिंचाई और वाटर कंट्रोल के लिए EzeBuddies के IoT समाधान।"
-          : "Deploy Vatavaran Monitor, Smart Sinchai, and Pump Sathi for climate, irrigation, and water automation.",
+          : "IoT devices for climate, irrigation, and pump automation: Vatavaran Monitor, Smart Sinchai, and Pump Sathi.",
       path: "/",
       robots: "index, follow",
     });
@@ -63,6 +64,7 @@ const Index = () => {
         <SolutionsSection />
         <TestimonialsCaseStudiesSection />
         <FaqSection />
+        <SeoContentSection />
       </main>
       <Footer />
       <StickyMobileCta />
