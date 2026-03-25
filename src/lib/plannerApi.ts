@@ -8,6 +8,12 @@ type PlannerRow = {
   optimal_co2?: string;
 };
 
+type SopConditions = {
+  optimal_temperature?: string;
+  optimal_humidity?: string;
+  optimal_co2?: string;
+};
+
 function asString(value: unknown) {
   return typeof value === "string" ? value : undefined;
 }
@@ -50,6 +56,89 @@ function normalizeRows(source: unknown): PlannerRow[] {
       } satisfies PlannerRow;
     })
     .filter((item): item is PlannerRow => Boolean(item));
+}
+
+function normalizeCropKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function readArrayCandidates(data: unknown) {
+  if (Array.isArray(data)) return [data];
+  const objectData = readObject(data);
+  if (!objectData) return [];
+  return [
+    objectData.data,
+    objectData.records,
+    objectData.devices,
+    objectData.items,
+    objectData.crops,
+    objectData.found_crops,
+  ].filter(Array.isArray) as unknown[][];
+}
+
+function normalizeSopMap(data: unknown): Record<string, SopConditions> {
+  const map: Record<string, SopConditions> = {};
+  const arrays = readArrayCandidates(data);
+
+  for (const arraySource of arrays) {
+    for (const item of arraySource) {
+      const row = readObject(item);
+      if (!row) continue;
+      const cropName = asString(row.crop_name) ?? asString(row.Crop_Name) ?? asString(row.cropName) ?? asString(row.name);
+      if (!cropName) continue;
+      const nestedData = readObject(row.data);
+      const optimalContainer = readObject(nestedData?.optimal_conditions) ?? readObject(row.optimal_conditions);
+      const flatContainer = nestedData ?? row;
+      const conditions: SopConditions = {
+        optimal_temperature: normalizeRange(optimalContainer?.temperature) ?? asString(flatContainer?.optimal_temperature),
+        optimal_humidity: normalizeRange(optimalContainer?.humidity) ?? asString(flatContainer?.optimal_humidity),
+        optimal_co2: normalizeRange(optimalContainer?.co2) ?? asString(flatContainer?.optimal_co2),
+      };
+      map[normalizeCropKey(cropName)] = conditions;
+    }
+  }
+
+  return map;
+}
+
+function resolveSopApiBase() {
+  const candidates = [
+    import.meta.env.VITE_SOP_API_BASE_URL,
+    import.meta.env.VITE_DEVICE_CONTROL_API_BASE_URL,
+    import.meta.env.VITE_PLANNER_API_URL,
+  ];
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (!value) continue;
+    try {
+      if (value.startsWith("http://") || value.startsWith("https://")) {
+        return new URL(value).origin;
+      }
+      return value;
+    } catch {
+      continue;
+    }
+  }
+  return "";
+}
+
+function resolvePlannerUpdateEndpoint() {
+  const explicit = import.meta.env.VITE_PLANNER_UPDATE_API_URL?.trim();
+  if (explicit) return explicit;
+
+  const plannerUrl = import.meta.env.VITE_PLANNER_API_URL?.trim();
+  if (plannerUrl) {
+    try {
+      const origin = new URL(plannerUrl).origin;
+      return `${origin}/planner/update-device`;
+    } catch {
+      // ignore and fallback
+    }
+  }
+
+  const fallbackBase = resolveSopApiBase();
+  if (fallbackBase) return `${fallbackBase.replace(/\/$/, "")}/planner/update-device`;
+  return "";
 }
 
 export async function fetchPlannerRows(args: {
@@ -95,4 +184,91 @@ export async function fetchPlannerRows(args: {
     normalizeRows(objectData?.data),
   ];
   return candidates.find((rows) => rows.length > 0) ?? [];
+}
+
+export async function fetchSopConditions(args: {
+  token: string;
+  userId: string;
+  cropNames: string[];
+}) {
+  const apiBase = resolveSopApiBase();
+  if (!apiBase) {
+    throw new Error("Missing SOP API base URL");
+  }
+
+  const uniqueCropNames = Array.from(
+    new Set(args.cropNames.map((item) => item.trim()).filter(Boolean)),
+  );
+
+  if (uniqueCropNames.length === 0) {
+    return {} as Record<string, SopConditions>;
+  }
+
+  const response = await fetch(`${apiBase.replace(/\/$/, "")}/SOP_data`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${args.token}`,
+    },
+    body: JSON.stringify({
+      user_id: args.userId,
+      crop_names: uniqueCropNames,
+    }),
+  });
+
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`SOP API failed (${response.status})`);
+  }
+
+  return normalizeSopMap(data);
+}
+
+export async function updatePlannerDevice(args: {
+  token: string;
+  userId: string;
+  deviceId: string;
+  payload: Partial<Pick<PlannerRow, "crop_name" | "sowing_date" | "harvest_date">>;
+}) {
+  const endpoint = resolvePlannerUpdateEndpoint();
+  if (!endpoint) {
+    throw new Error("Missing planner update API endpoint");
+  }
+
+  const body: Record<string, unknown> = {
+    user_id: args.userId,
+    device_id: args.deviceId,
+  };
+
+  if (typeof args.payload.crop_name === "string") body.crop_name = args.payload.crop_name;
+  if (typeof args.payload.sowing_date === "string") body.sowing_date = args.payload.sowing_date;
+  if (typeof args.payload.harvest_date === "string") body.harvest_date = args.payload.harvest_date;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${args.token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Planner update API failed (${response.status})`);
+  }
+
+  return data;
 }

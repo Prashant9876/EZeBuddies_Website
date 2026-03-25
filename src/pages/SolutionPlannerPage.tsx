@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Leaf, CalendarDays, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStoredAuthToken, getStoredLoginResponse } from "@/lib/auth";
-import { fetchPlannerRows } from "@/lib/plannerApi";
+import { fetchPlannerRows, fetchSopConditions, updatePlannerDevice } from "@/lib/plannerApi";
 import { applySeo } from "@/lib/seo";
 import { cropsCatalog } from "@/data/cropsCatalog";
 import { useLanguage } from "@/lib/language";
@@ -37,6 +37,10 @@ type PlannerEditableFields = Pick<PlannerCardState, "crop_name" | "sowing_date" 
 
 function asString(value: unknown) {
   return typeof value === "string" ? value : undefined;
+}
+
+function readObject(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 function normalizeName(input: string) {
@@ -77,6 +81,13 @@ function normalizeDateForInput(value: string | undefined) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function formatDateForApi(value: string) {
+  const trimmed = value.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!isoMatch) return trimmed;
+  return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+}
+
 function findSolutionDevices(loginResponse: Record<string, unknown> | null, targetSolution: string) {
   const solutions = loginResponse?.solutions;
   if (!Array.isArray(solutions)) return [];
@@ -102,8 +113,13 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
   const { t } = useLanguage();
   const loginResponse = useMemo(() => getStoredLoginResponse(), []);
   const token = useMemo(() => getStoredAuthToken(), []);
-  const userId = typeof loginResponse?.user_id === "string" ? loginResponse.user_id : null;
+  const userId = useMemo(() => {
+    const userObj = readObject(loginResponse?.user);
+    const value = loginResponse?.user_id ?? userObj?.user_id ?? userObj?.id;
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  }, [loginResponse]);
   const [isLoading, setIsLoading] = useState(false);
+  const [submittingByDevice, setSubmittingByDevice] = useState<Record<string, boolean>>({});
   const [initialByDevice, setInitialByDevice] = useState<Record<string, PlannerEditableFields>>({});
 
   const sensorDevices = useMemo(
@@ -163,19 +179,37 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
         });
         if (!mounted || rows.length === 0) return;
 
+        const uniqueCropNames = Array.from(
+          new Set(rows.map((row) => row.crop_name?.trim()).filter((value): value is string => Boolean(value))),
+        );
+        let sopByCrop: Record<string, { optimal_temperature?: string; optimal_humidity?: string; optimal_co2?: string }> = {};
+        if (uniqueCropNames.length > 0) {
+          try {
+            sopByCrop = await fetchSopConditions({
+              token,
+              userId,
+              cropNames: uniqueCropNames,
+            });
+          } catch (error) {
+            console.error("SOP API failed:", error);
+          }
+        }
+
         const rowByDevice = new Map(rows.map((row) => [row.device_id, row]));
         setCards((prev) => {
           const next = prev.map((card) => {
             const row = rowByDevice.get(card.device_id);
             if (!row) return card;
+            const cropName = row.crop_name ?? card.crop_name;
+            const sop = cropName ? sopByCrop[cropName.trim().toLowerCase()] : undefined;
             return {
               ...card,
-              crop_name: row.crop_name ?? card.crop_name,
+              crop_name: cropName,
               sowing_date: normalizeDateForInput(row.sowing_date) || card.sowing_date,
               harvest_date: normalizeDateForInput(row.harvest_date) || card.harvest_date,
-              optimal_temperature: row.optimal_temperature ?? card.optimal_temperature,
-              optimal_humidity: row.optimal_humidity ?? card.optimal_humidity,
-              optimal_co2: row.optimal_co2 ?? card.optimal_co2,
+              optimal_temperature: sop?.optimal_temperature ?? row.optimal_temperature ?? card.optimal_temperature,
+              optimal_humidity: sop?.optimal_humidity ?? row.optimal_humidity ?? card.optimal_humidity,
+              optimal_co2: sop?.optimal_co2 ?? row.optimal_co2 ?? card.optimal_co2,
             };
           });
           setInitialByDevice(
@@ -262,20 +296,60 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
     );
   };
 
-  const handleCardSubmit = (card: PlannerCardState) => {
+  const handleCardSubmit = async (card: PlannerCardState) => {
     if (!isCardDirty(card)) return;
-    toast({
-      title: t("planner.updatedTitle"),
-      description: t("planner.updatedDescription", { device: card.device_name }),
-    });
-    setInitialByDevice((prev) => ({
-      ...prev,
-      [card.device_id]: {
-        crop_name: card.crop_name,
-        sowing_date: card.sowing_date,
-        harvest_date: card.harvest_date,
-      },
-    }));
+    if (!token || !userId) {
+      toast({
+        title: t("planner.updateFailedTitle"),
+        description: t("planner.updateFailedDescription"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const initial = initialByDevice[card.device_id];
+    if (!initial) return;
+
+    const payload: Partial<Pick<PlannerCardState, "crop_name" | "sowing_date" | "harvest_date">> = {};
+    if (initial.crop_name !== card.crop_name) payload.crop_name = card.crop_name;
+    if (initial.sowing_date !== card.sowing_date) payload.sowing_date = formatDateForApi(card.sowing_date);
+    if (initial.harvest_date !== card.harvest_date) payload.harvest_date = formatDateForApi(card.harvest_date);
+    if (Object.keys(payload).length === 0) return;
+
+    try {
+      setSubmittingByDevice((prev) => ({ ...prev, [card.device_id]: true }));
+      await updatePlannerDevice({
+        token,
+        userId,
+        deviceId: card.device_id,
+        payload,
+      });
+      toast({
+        title: t("planner.updatedTitle"),
+        description: t("planner.updatedDescription", { device: card.device_name }),
+      });
+      setInitialByDevice((prev) => ({
+        ...prev,
+        [card.device_id]: {
+          crop_name: card.crop_name,
+          sowing_date: card.sowing_date,
+          harvest_date: card.harvest_date,
+        },
+      }));
+    } catch (error) {
+      console.error("Planner update API failed:", error);
+      toast({
+        title: t("planner.updateFailedTitle"),
+        description: t("planner.updateFailedDescription"),
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingByDevice((prev) => {
+        const next = { ...prev };
+        delete next[card.device_id];
+        return next;
+      });
+    }
   };
 
   return (
@@ -404,9 +478,9 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
                     className={`w-full ${isCardDirty(card) ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
                     variant={isCardDirty(card) ? "default" : "outline"}
                     onClick={() => handleCardSubmit(card)}
-                    disabled={!isCardDirty(card)}
+                    disabled={!isCardDirty(card) || Boolean(submittingByDevice[card.device_id])}
                   >
-                    {t("planner.submit")}
+                    {submittingByDevice[card.device_id] ? t("planner.submitting") : t("planner.submit")}
                   </Button>
                 </CardContent>
               </Card>

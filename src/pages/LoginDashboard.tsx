@@ -3,13 +3,14 @@ import { Gauge, Thermometer, Droplets, Leaf, Cpu, ToggleLeft, RefreshCw, Sparkle
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { clearStoredAuth, getStoredAuthToken, getStoredLoginResponse } from "@/lib/auth";
+import { getStoredAuthToken, getStoredLoginResponse } from "@/lib/auth";
 import { Switch } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/lib/language";
 import { applySeo } from "@/lib/seo";
+import { changeRelayState, triggerEStop } from "@/lib/dashboardControlApi";
 
 type Device = {
   device_id: string;
@@ -28,6 +29,26 @@ function asNonEmptyString(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function readObject(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function resolveApiBase(...candidates: Array<string | undefined>) {
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (!value) continue;
+    try {
+      if (value.startsWith("http://") || value.startsWith("https://")) {
+        return new URL(value).origin;
+      }
+      return value;
+    } catch {
+      continue;
+    }
+  }
+  return "";
 }
 
 function asBoolean(value: unknown) {
@@ -217,17 +238,20 @@ function EnvironmentControlCard({
   realtime,
   t,
   estopActive,
+  onRelayToggle,
 }: {
   device: Device;
   realtime?: RealtimeRecord;
   t: TranslateFn;
   estopActive?: boolean;
+  onRelayToggle?: (args: { deviceId: string; buttonName: string; state: "on" | "off" }) => Promise<void>;
 }) {
   const { toast } = useToast();
   const initialChannels = useMemo(() => buildActuatorChannels(device.device_id, realtime), [device.device_id, realtime]);
   const initialMode = useMemo(() => toModeState(realtime?.Mode ?? realtime?.mode ?? realtime?.MODE), [realtime]);
   const [channels, setChannels] = useState(initialChannels);
   const [isAutoMode, setIsAutoMode] = useState(initialMode);
+  const [pendingChannels, setPendingChannels] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     setChannels(initialChannels);
@@ -242,7 +266,7 @@ function EnvironmentControlCard({
     setChannels((prev) => prev.map((item) => ({ ...item, enabled: false })));
   }, [estopActive]);
 
-  const handleChannelToggle = (index: number, next: boolean) => {
+  const handleChannelToggle = async (index: number, next: boolean) => {
     if (estopActive) {
       toast({
         title: t("dashboard.estopActiveTitle"),
@@ -261,7 +285,36 @@ function EnvironmentControlCard({
       return;
     }
 
+    if (!onRelayToggle) {
+      setChannels((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, enabled: next } : item)));
+      return;
+    }
+
+    const channel = channels[index];
+    if (!channel) return;
+    setPendingChannels((prev) => ({ ...prev, [index]: true }));
     setChannels((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, enabled: next } : item)));
+    try {
+      await onRelayToggle({
+        deviceId: device.device_id,
+        buttonName: channel.name,
+        state: next ? "on" : "off",
+      });
+    } catch (error) {
+      console.error("Relay state update failed:", error);
+      setChannels((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, enabled: !next } : item)));
+      toast({
+        title: t("dashboard.relayUpdateFailedTitle"),
+        description: t("dashboard.relayUpdateFailedDescription"),
+        variant: "destructive",
+      });
+    } finally {
+      setPendingChannels((prev) => {
+        const nextState = { ...prev };
+        delete nextState[index];
+        return nextState;
+      });
+    }
   };
 
   return (
@@ -299,6 +352,7 @@ function EnvironmentControlCard({
               <Switch
                 checked={channel.enabled}
                 onCheckedChange={(next) => handleChannelToggle(index, next)}
+                disabled={Boolean(pendingChannels[index])}
               />
             </div>
           ))}
@@ -415,18 +469,27 @@ export default function LoginDashboard() {
     () => (solutionGroups.length > 0 ? solutionGroups.flatMap((solution) => solution.devices) : getDevices(loginResponse)),
     [solutionGroups, loginResponse],
   );
-  const userId = typeof loginResponse?.user_id === "string" ? loginResponse.user_id : null;
+  const userId = useMemo(() => {
+    const userObj = readObject(loginResponse?.user);
+    const value = loginResponse?.user_id ?? userObj?.user_id ?? userObj?.id;
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  }, [loginResponse]);
+  const controlApiBase = useMemo(
+    () =>
+      resolveApiBase(
+        import.meta.env.VITE_DEVICE_CONTROL_API_BASE_URL,
+        import.meta.env.VITE_PLANNER_API_URL,
+        import.meta.env.VITE_FORGOT_PASSWORD_API_URL,
+      ),
+    [],
+  );
   const [realtimeData, setRealtimeData] = useState<Record<string, RealtimeRecord>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isEStopSubmitting, setIsEStopSubmitting] = useState(false);
   const [isEStopDialogOpen, setIsEStopDialogOpen] = useState(false);
   const [selectedSolutionForEStop, setSelectedSolutionForEStop] = useState<string | null>(null);
   const [estopSolutions, setEstopSolutions] = useState<Record<string, boolean>>({});
   const quantityByName = useMemo(() => buildDeviceCounts(devices), [devices]);
-  const handleLogout = () => {
-    clearStoredAuth();
-    navigate("/");
-  };
-
   useEffect(() => {
     if (!token || !loginResponse) {
       navigate("/");
@@ -491,6 +554,23 @@ export default function LoginDashboard() {
     return () => clearInterval(interval);
   }, [token, userId, refreshRealtimeData]);
 
+  const handleRelayToggle = useCallback(
+    async (args: { deviceId: string; buttonName: string; state: "on" | "off" }) => {
+      if (!token || !userId || !controlApiBase) {
+        throw new Error("Missing token, user or VITE_DEVICE_CONTROL_API_BASE_URL");
+      }
+      await changeRelayState({
+        apiBase: controlApiBase,
+        token,
+        userId,
+        deviceId: args.deviceId,
+        buttonName: args.buttonName,
+        state: args.state,
+      });
+    },
+    [token, userId, controlApiBase],
+  );
+
   const renderDeviceCard = (device: Device) => {
     const normalizedName = device.device_name.toLowerCase();
     const realtime = realtimeData[device.device_id];
@@ -498,13 +578,13 @@ export default function LoginDashboard() {
       return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
     }
     if (normalizedName.includes("enviroment_control")) {
-      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} onRelayToggle={handleRelayToggle} />;
     }
     if (normalizedName.includes("irrigation_intel")) {
       return <IrrigationIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
     }
     if (normalizedName.includes("irrigation_control")) {
-      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} onRelayToggle={handleRelayToggle} />;
     }
 
     return (
@@ -535,13 +615,31 @@ export default function LoginDashboard() {
       return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
     }
     if (normalizedName.includes("enviroment_control")) {
-      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} estopActive={estopActive} />;
+      return (
+        <EnvironmentControlCard
+          key={device.device_id}
+          device={device}
+          realtime={realtime}
+          t={t}
+          estopActive={estopActive}
+          onRelayToggle={handleRelayToggle}
+        />
+      );
     }
     if (normalizedName.includes("irrigation_intel")) {
       return <IrrigationIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
     }
     if (normalizedName.includes("irrigation_control")) {
-      return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} estopActive={estopActive} />;
+      return (
+        <EnvironmentControlCard
+          key={device.device_id}
+          device={device}
+          realtime={realtime}
+          t={t}
+          estopActive={estopActive}
+          onRelayToggle={handleRelayToggle}
+        />
+      );
     }
 
     return renderDeviceCard(device);
@@ -552,16 +650,44 @@ export default function LoginDashboard() {
     setIsEStopDialogOpen(true);
   };
 
-  const handleConfirmEStop = () => {
-    if (!selectedSolutionForEStop) return;
-    setEstopSolutions((prev) => ({ ...prev, [selectedSolutionForEStop]: true }));
-    toast({
-      title: t("dashboard.estopEnabledTitle"),
-      description: t("dashboard.estopEnabledDescription", { solution: selectedSolutionForEStop }),
-      variant: "destructive",
-    });
-    setIsEStopDialogOpen(false);
-    setSelectedSolutionForEStop(null);
+  const handleConfirmEStop = async () => {
+    const solutionName = selectedSolutionForEStop?.trim();
+    if (!solutionName) return;
+    if (!token || !userId || !controlApiBase) {
+      toast({
+        title: t("dashboard.estopFailedTitle"),
+        description: t("dashboard.estopConfigMissingDescription"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsEStopSubmitting(true);
+      await triggerEStop({
+        apiBase: controlApiBase,
+        token,
+        userId,
+        solutionName,
+      });
+      setEstopSolutions((prev) => ({ ...prev, [solutionName]: true }));
+      toast({
+        title: t("dashboard.estopEnabledTitle"),
+        description: t("dashboard.estopEnabledDescription", { solution: solutionName }),
+        variant: "destructive",
+      });
+      setIsEStopDialogOpen(false);
+      setSelectedSolutionForEStop(null);
+    } catch (error) {
+      console.error("E-Stop API failed:", error);
+      toast({
+        title: t("dashboard.estopFailedTitle"),
+        description: t("dashboard.estopFailedDescription"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsEStopSubmitting(false);
+    }
   };
 
   return (
@@ -680,7 +806,7 @@ export default function LoginDashboard() {
             <DialogDescription className="sr-only">Emergency stop confirmation</DialogDescription>
           </DialogHeader>
           <p className="text-sm font-bold text-foreground">{t("dashboard.estopDialogMessage")}</p>
-          <Button variant="destructive" className="w-full" onClick={handleConfirmEStop}>
+          <Button variant="destructive" className="w-full" onClick={handleConfirmEStop} disabled={isEStopSubmitting}>
             {t("dashboard.stop")}
           </Button>
         </DialogContent>
