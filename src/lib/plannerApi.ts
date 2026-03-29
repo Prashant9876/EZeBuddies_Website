@@ -8,10 +8,36 @@ type PlannerRow = {
   optimal_co2?: string;
 };
 
-type SopConditions = {
+type GrowthStage = {
+  stage: string;
+  days: string;
+  ideal_height_cm?: string;
+  notes?: string;
+  min_days?: number;
+  max_days?: number | null;
+  climate_day_temperature?: string;
+  climate_night_temperature?: string;
+  climate_humidity?: string;
+  climate_co2?: string;
+  nutrition_ec?: string;
+  nutrition_ph?: string;
+  nutrition_water_temperature?: string;
+  light_ppfd?: string;
+  light_uva?: string;
+  light_uvb?: string;
+};
+
+export type SopConditions = {
   optimal_temperature?: string;
   optimal_humidity?: string;
   optimal_co2?: string;
+  optimal_nutrition_ec?: string;
+  optimal_nutrition_ph?: string;
+  optimal_nutrition_water_temperature?: string;
+  optimal_light_ppfd?: string;
+  optimal_light_uva?: string;
+  optimal_light_uvb?: string;
+  growth_stages?: GrowthStage[];
 };
 
 function asString(value: unknown) {
@@ -62,6 +88,78 @@ function normalizeCropKey(value: string) {
   return value.trim().toLowerCase();
 }
 
+function parseStageDays(daysText: string | undefined) {
+  if (!daysText) return { min_days: undefined, max_days: undefined as number | undefined };
+  const text = daysText.trim();
+  const rangeMatch = /^(\d+)\s*[–—-]\s*(\d+)$/.exec(text);
+  if (rangeMatch) {
+    return { min_days: Number(rangeMatch[1]), max_days: Number(rangeMatch[2]) };
+  }
+  const plusMatch = /^(\d+)\s*\+$/.exec(text);
+  if (plusMatch) {
+    return { min_days: Number(plusMatch[1]), max_days: null };
+  }
+  const singleMatch = /^(\d+)$/.exec(text);
+  if (singleMatch) {
+    const day = Number(singleMatch[1]);
+    return { min_days: day, max_days: day };
+  }
+  return { min_days: undefined, max_days: undefined as number | undefined };
+}
+
+function normalizeGrowthStages(source: unknown): GrowthStage[] | undefined {
+  if (!Array.isArray(source)) return undefined;
+  const stages = source
+    .map((item) => {
+      const row = readObject(item);
+      if (!row) return null;
+      const stage = asString(row.stage) ?? asString(row.name);
+      const dayRange = readObject(row.day_range);
+      const dayStart = asNumber(dayRange?.start);
+      const dayEnd = asNumber(dayRange?.end);
+      const dayRangeLabel =
+        dayStart !== undefined
+          ? dayEnd !== undefined
+            ? `${dayStart}-${dayEnd}`
+            : `${dayStart}+`
+          : undefined;
+      const days = asString(row.days) ?? dayRangeLabel;
+      if (!stage || !days) return null;
+      const parsed =
+        dayStart !== undefined
+          ? { min_days: dayStart, max_days: dayEnd === undefined ? null : dayEnd }
+          : parseStageDays(days);
+      const climate = readObject(row.climate);
+      const nutrition = readObject(row.nutrition);
+      const light = readObject(row.light);
+      const height = readObject(readObject(row.plant_metrics)?.height_cm);
+      const heightLabel =
+        height && asNumber(height.min) !== undefined && asNumber(height.max) !== undefined
+          ? `${asNumber(height.min)}-${asNumber(height.max)} cm`
+          : asString(row.ideal_height_cm);
+      return {
+        stage,
+        days,
+        ideal_height_cm: heightLabel,
+        notes: asString(row.notes) ?? asString(row.observation),
+        min_days: parsed.min_days,
+        max_days: parsed.max_days,
+        climate_day_temperature: normalizeRange(climate?.day_temperature),
+        climate_night_temperature: normalizeRange(climate?.night_temperature),
+        climate_humidity: normalizeRange(climate?.humidity),
+        climate_co2: normalizeRange(climate?.co2),
+        nutrition_ec: normalizeRange(nutrition?.ec),
+        nutrition_ph: normalizeRange(nutrition?.ph),
+        nutrition_water_temperature: normalizeRange(nutrition?.water_temperature),
+        light_ppfd: normalizeRange(light?.ppfd),
+        light_uva: normalizeRange(light?.uva),
+        light_uvb: normalizeRange(light?.uvb),
+      } satisfies GrowthStage;
+    })
+    .filter((item): item is GrowthStage => Boolean(item));
+  return stages.length > 0 ? stages : undefined;
+}
+
 function readArrayCandidates(data: unknown) {
   if (Array.isArray(data)) return [data];
   const objectData = readObject(data);
@@ -89,10 +187,20 @@ function normalizeSopMap(data: unknown): Record<string, SopConditions> {
       const nestedData = readObject(row.data);
       const optimalContainer = readObject(nestedData?.optimal_conditions) ?? readObject(row.optimal_conditions);
       const flatContainer = nestedData ?? row;
+      const nutritionContainer = readObject(nestedData?.optimal_nutrition) ?? readObject(row.optimal_nutrition);
+      const lightContainer = readObject(nestedData?.optimal_light) ?? readObject(row.optimal_light);
       const conditions: SopConditions = {
         optimal_temperature: normalizeRange(optimalContainer?.temperature) ?? asString(flatContainer?.optimal_temperature),
         optimal_humidity: normalizeRange(optimalContainer?.humidity) ?? asString(flatContainer?.optimal_humidity),
         optimal_co2: normalizeRange(optimalContainer?.co2) ?? asString(flatContainer?.optimal_co2),
+        optimal_nutrition_ec: normalizeRange(nutritionContainer?.ec) ?? asString(flatContainer?.optimal_nutrition_ec),
+        optimal_nutrition_ph: normalizeRange(nutritionContainer?.ph) ?? asString(flatContainer?.optimal_nutrition_ph),
+        optimal_nutrition_water_temperature:
+          normalizeRange(nutritionContainer?.water_temperature) ?? asString(flatContainer?.optimal_nutrition_water_temperature),
+        optimal_light_ppfd: normalizeRange(lightContainer?.ppfd) ?? asString(flatContainer?.optimal_light_ppfd),
+        optimal_light_uva: normalizeRange(lightContainer?.uva) ?? asString(flatContainer?.optimal_light_uva),
+        optimal_light_uvb: normalizeRange(lightContainer?.uvb) ?? asString(flatContainer?.optimal_light_uvb),
+        growth_stages: normalizeGrowthStages(nestedData?.growth_stages ?? row.growth_stages),
       };
       map[normalizeCropKey(cropName)] = conditions;
     }
