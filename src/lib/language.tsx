@@ -69,7 +69,8 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 
     "dashboard.navTitle": "Navigation",
     "dashboard.homeButton": "ezeGreen Dashboard",
-    "dashboard.vataranPlanner": "Vataran Planner",
+    "dashboard.VatavaranPlanner": "Vatavaran Planner",
+    "dashboard.vataranPlanner": "Vatavaran Planner",
     "dashboard.sinchaiPlanner": "Sinchai Planner",
     "dashboard.welcome": "Welcome, {{name}}",
     "dashboard.notAvailable": "Not available",
@@ -219,7 +220,8 @@ const translations: Record<LanguageCode, Record<string, string>> = {
 
     "dashboard.navTitle": "नेविगेशन",
     "dashboard.homeButton": "ezeGreen डैशबोर्ड",
-    "dashboard.vataranPlanner": "वातारण प्लानर",
+    "dashboard.VatavaranPlanner": "वातारण प्लानर",
+    "dashboard.vataranPlanner": "वातावरण प्लानर",
     "dashboard.sinchaiPlanner": "सिंचाई प्लानर",
     "dashboard.welcome": "स्वागत है, {{name}}",
     "dashboard.notAvailable": "उपलब्ध नहीं",

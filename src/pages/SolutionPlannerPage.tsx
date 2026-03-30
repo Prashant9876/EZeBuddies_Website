@@ -136,10 +136,28 @@ function getCurrentStageIndex(card: PlannerCardState) {
     if (max !== null && daysAfterSowing >= min && daysAfterSowing <= max) return index;
   }
 
-  const withMin = card.growth_stages.filter((stage) => typeof stage.min_days === "number");
-  if (withMin.length === 0) return -1;
-  if (daysAfterSowing < (withMin[0].min_days ?? 0)) return 0;
-  return card.growth_stages.length - 1;
+  const indexedStages = card.growth_stages
+    .map((stage, index) => ({ index, min: stage.min_days }))
+    .filter((row): row is { index: number; min: number } => typeof row.min === "number")
+    .sort((a, b) => a.min - b.min);
+
+  if (indexedStages.length === 0) return -1;
+
+  if (daysAfterSowing < indexedStages[0].min) {
+    return indexedStages[0].index;
+  }
+
+  // If SOP has day-range gaps, stay on the latest stage that has started
+  // instead of jumping to the last stage (e.g. Harvest).
+  let fallbackIndex = indexedStages[0].index;
+  for (const row of indexedStages) {
+    if (row.min <= daysAfterSowing) {
+      fallbackIndex = row.index;
+    } else {
+      break;
+    }
+  }
+  return fallbackIndex;
 }
 
 function findSolutionDevices(loginResponse: Record<string, unknown> | null, targetSolution: string) {
