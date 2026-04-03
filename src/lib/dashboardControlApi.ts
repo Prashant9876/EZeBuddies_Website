@@ -69,3 +69,21 @@ export async function triggerEStop(args: {
   });
 }
 
+export async function fetchHistoricalData(args: {
+  apiBase: string;
+  token: string;
+  userId: string;
+  deviceId: string;
+  deviceName: string;
+  rangeValue: 0.5 | 1 | 3;
+}) {
+  const url = `${args.apiBase.replace(/\/$/, "")}/historical_data`;
+  return postJson(url, args.token, {
+    user_id: args.userId,
+    device_id: args.deviceId,
+    device_name: args.deviceName,
+    time_range: {
+      value: args.rangeValue,
+    },
+  });
+}

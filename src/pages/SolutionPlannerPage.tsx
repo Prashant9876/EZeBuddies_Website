@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Leaf, CalendarDays, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getStoredAuthToken, getStoredLoginResponse } from "@/lib/auth";
-import { fetchPlannerRows, fetchSopConditions, updatePlannerDevice } from "@/lib/plannerApi";
+import { fetchPlannerRows, fetchSopConditions, updatePlannerDevice, type SopConditions } from "@/lib/plannerApi";
 import { applySeo } from "@/lib/seo";
 import { cropsCatalog } from "@/data/cropsCatalog";
 import { useLanguage } from "@/lib/language";
@@ -31,6 +31,30 @@ type PlannerCardState = {
   optimal_temperature?: string;
   optimal_humidity?: string;
   optimal_co2?: string;
+  optimal_nutrition_ec?: string;
+  optimal_nutrition_ph?: string;
+  optimal_nutrition_water_temperature?: string;
+  optimal_light_ppfd?: string;
+  optimal_light_uva?: string;
+  optimal_light_uvb?: string;
+  growth_stages?: Array<{
+    stage: string;
+    days: string;
+    ideal_height_cm?: string;
+    notes?: string;
+    min_days?: number;
+    max_days?: number | null;
+    climate_day_temperature?: string;
+    climate_night_temperature?: string;
+    climate_humidity?: string;
+    climate_co2?: string;
+    nutrition_ec?: string;
+    nutrition_ph?: string;
+    nutrition_water_temperature?: string;
+    light_ppfd?: string;
+    light_uva?: string;
+    light_uvb?: string;
+  }>;
 };
 
 type PlannerEditableFields = Pick<PlannerCardState, "crop_name" | "sowing_date" | "harvest_date">;
@@ -88,6 +112,54 @@ function formatDateForApi(value: string) {
   return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
 }
 
+function getDaysSinceSowing(value: string) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.max(0, diff);
+}
+
+function getCurrentStageIndex(card: PlannerCardState) {
+  if (!card.growth_stages || card.growth_stages.length === 0) return -1;
+  const daysAfterSowing = getDaysSinceSowing(card.sowing_date);
+  if (daysAfterSowing === null) return -1;
+
+  for (let index = 0; index < card.growth_stages.length; index += 1) {
+    const stage = card.growth_stages[index];
+    const min = typeof stage.min_days === "number" ? stage.min_days : null;
+    const max = stage.max_days === null || typeof stage.max_days === "number" ? stage.max_days : null;
+    if (min === null) continue;
+    if (max === null && daysAfterSowing >= min) return index;
+    if (max !== null && daysAfterSowing >= min && daysAfterSowing <= max) return index;
+  }
+
+  const indexedStages = card.growth_stages
+    .map((stage, index) => ({ index, min: stage.min_days }))
+    .filter((row): row is { index: number; min: number } => typeof row.min === "number")
+    .sort((a, b) => a.min - b.min);
+
+  if (indexedStages.length === 0) return -1;
+
+  if (daysAfterSowing < indexedStages[0].min) {
+    return indexedStages[0].index;
+  }
+
+  // If SOP has day-range gaps, stay on the latest stage that has started
+  // instead of jumping to the last stage (e.g. Harvest).
+  let fallbackIndex = indexedStages[0].index;
+  for (const row of indexedStages) {
+    if (row.min <= daysAfterSowing) {
+      fallbackIndex = row.index;
+    } else {
+      break;
+    }
+  }
+  return fallbackIndex;
+}
+
 function findSolutionDevices(loginResponse: Record<string, unknown> | null, targetSolution: string) {
   const solutions = loginResponse?.solutions;
   if (!Array.isArray(solutions)) return [];
@@ -121,6 +193,7 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
   const [isLoading, setIsLoading] = useState(false);
   const [submittingByDevice, setSubmittingByDevice] = useState<Record<string, boolean>>({});
   const [initialByDevice, setInitialByDevice] = useState<Record<string, PlannerEditableFields>>({});
+  const stageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const sensorDevices = useMemo(
     () => findSolutionDevices(loginResponse, solutionName).filter((device) => device.device_type.toLowerCase() === "sensors"),
@@ -182,7 +255,7 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
         const uniqueCropNames = Array.from(
           new Set(rows.map((row) => row.crop_name?.trim()).filter((value): value is string => Boolean(value))),
         );
-        let sopByCrop: Record<string, { optimal_temperature?: string; optimal_humidity?: string; optimal_co2?: string }> = {};
+        let sopByCrop: Record<string, SopConditions> = {};
         if (uniqueCropNames.length > 0) {
           try {
             sopByCrop = await fetchSopConditions({
@@ -210,6 +283,14 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
               optimal_temperature: sop?.optimal_temperature ?? row.optimal_temperature ?? card.optimal_temperature,
               optimal_humidity: sop?.optimal_humidity ?? row.optimal_humidity ?? card.optimal_humidity,
               optimal_co2: sop?.optimal_co2 ?? row.optimal_co2 ?? card.optimal_co2,
+              optimal_nutrition_ec: sop?.optimal_nutrition_ec ?? card.optimal_nutrition_ec,
+              optimal_nutrition_ph: sop?.optimal_nutrition_ph ?? card.optimal_nutrition_ph,
+              optimal_nutrition_water_temperature:
+                sop?.optimal_nutrition_water_temperature ?? card.optimal_nutrition_water_temperature,
+              optimal_light_ppfd: sop?.optimal_light_ppfd ?? card.optimal_light_ppfd,
+              optimal_light_uva: sop?.optimal_light_uva ?? card.optimal_light_uva,
+              optimal_light_uvb: sop?.optimal_light_uvb ?? card.optimal_light_uvb,
+              growth_stages: sop?.growth_stages ?? card.growth_stages,
             };
           });
           setInitialByDevice(
@@ -239,6 +320,23 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
       mounted = false;
     };
   }, [token, userId, sensorDevices.length, plannerSection, toast, t]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      cards.forEach((card) => {
+        const currentStageIndex = getCurrentStageIndex(card);
+        if (currentStageIndex < 0) return;
+        const key = `${card.device_id}-${currentStageIndex}`;
+        const element = stageRefs.current[key];
+        if (!element) return;
+        element.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      });
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [cards]);
 
   const updateCard = (deviceId: string, key: "crop_name" | "sowing_date" | "harvest_date", value: string) => {
     setCards((prev) => prev.map((card) => (card.device_id === deviceId ? { ...card, [key]: value } : card)));
@@ -458,19 +556,153 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
-                      <p className="text-xs font-semibold text-sky-700">{t("planner.optimalTemperature")}</p>
-                      <p className="mt-1 text-lg font-bold text-sky-900">{card.optimal_temperature ?? getOptimalByAge(card).temperature}</p>
-                    </div>
-                    <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3">
-                      <p className="text-xs font-semibold text-cyan-700">{t("planner.optimalHumidity")}</p>
-                      <p className="mt-1 text-lg font-bold text-cyan-900">{card.optimal_humidity ?? getOptimalByAge(card).humidity}</p>
-                    </div>
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                      <p className="text-xs font-semibold text-emerald-700">{t("planner.optimalCo2")}</p>
-                      <p className="mt-1 text-lg font-bold text-emerald-900">{card.optimal_co2 ?? getOptimalByAge(card).co2}</p>
-                    </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{t("planner.growthStagesTitle")}</p>
+                    {card.growth_stages && card.growth_stages.length > 0 ? (
+                      <div className="overflow-x-auto pb-1">
+                        <div className="relative flex min-w-max items-stretch gap-3 pr-1">
+                          <div className="pointer-events-none absolute left-2 right-2 top-7 h-px bg-gradient-to-r from-emerald-200 via-sky-200 to-cyan-200" />
+                          {(() => {
+                            const currentStageIndex = getCurrentStageIndex(card);
+                            return card.growth_stages.map((stage, stageIndex) => {
+                              const active = stageIndex === currentStageIndex;
+                              const completed = currentStageIndex >= 0 && stageIndex < currentStageIndex;
+                              const hasNutrition = Boolean(stage.nutrition_ec || stage.nutrition_ph || stage.nutrition_water_temperature);
+                              const hasLight = Boolean(stage.light_ppfd);
+                              const stageStatus = active
+                                ? t("planner.stageOngoing")
+                                : completed
+                                  ? t("planner.stageCompleted")
+                                  : t("planner.stagePending");
+                              return (
+                                <motion.div
+                                  key={`${card.device_id}-${stage.stage}-${stageIndex}`}
+                                  ref={(el) => {
+                                    stageRefs.current[`${card.device_id}-${stageIndex}`] = el;
+                                  }}
+                                  initial={{ opacity: 0, y: 12 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: 0.25, delay: stageIndex * 0.05 }}
+                                  whileHover={{ y: -3, scale: 1.01 }}
+                                  className={`relative w-72 rounded-2xl border p-3 transition ${
+                                    active
+                                      ? "scale-[1.02] border-emerald-400 bg-gradient-to-b from-emerald-50 via-white to-emerald-50/50 shadow-[0_14px_32px_-16px_rgba(20,130,90,0.7)]"
+                                      : completed
+                                        ? "border-emerald-300/80 bg-emerald-50/40 shadow-[0_8px_20px_-16px_rgba(40,120,90,0.45)]"
+                                        : "border-slate-200 bg-white shadow-[0_8px_20px_-16px_rgba(30,60,110,0.45)]"
+                                  }`}
+                                >
+                                  <div
+                                    className={`absolute left-3 top-2 z-10 h-4 w-4 rounded-full border-2 ${
+                                      active
+                                        ? "border-emerald-500 bg-emerald-500"
+                                        : completed
+                                          ? "border-emerald-400 bg-emerald-100"
+                                          : "border-slate-300 bg-white"
+                                    }`}
+                                  />
+                                  <div className="mt-3 flex items-start justify-between gap-2">
+                                    <p className={`text-sm font-semibold ${active ? "text-emerald-800" : "text-slate-800"}`}>{stage.stage}</p>
+                                    <span
+                                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                        active
+                                          ? "bg-emerald-600 text-white"
+                                          : completed
+                                            ? "bg-emerald-100 text-emerald-700"
+                                            : "bg-slate-100 text-slate-600"
+                                      }`}
+                                    >
+                                      {stageStatus}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 rounded-lg border border-slate-200/90 bg-slate-50/80 px-2 py-1.5">
+                                    <p className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${active ? "text-emerald-700" : "text-slate-600"}`}>
+                                      {t("planner.stageDays")}
+                                    </p>
+                                    <p className={`text-sm font-bold ${active ? "text-emerald-800" : "text-slate-800"}`}>{stage.days}</p>
+                                  </div>
+                                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                                    {stage.climate_day_temperature ? (
+                                      <div className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1">
+                                        <p className="text-[10px] font-semibold text-sky-700">{t("planner.optimalDayTemperature")}</p>
+                                        <p className="text-[11px] font-semibold text-sky-900">{stage.climate_day_temperature}</p>
+                                      </div>
+                                    ) : null}
+                                    {stage.climate_night_temperature ? (
+                                      <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1">
+                                        <p className="text-[10px] font-semibold text-indigo-700">{t("planner.optimalNightTemperature")}</p>
+                                        <p className="text-[11px] font-semibold text-indigo-900">{stage.climate_night_temperature}</p>
+                                      </div>
+                                    ) : null}
+                                    {stage.climate_humidity ? (
+                                      <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-2 py-1">
+                                        <p className="text-[10px] font-semibold text-cyan-700">{t("planner.optimalHumidity")}</p>
+                                        <p className="text-[11px] font-semibold text-cyan-900">{stage.climate_humidity}</p>
+                                      </div>
+                                    ) : null}
+                                    {stage.climate_co2 ? (
+                                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1">
+                                        <p className="text-[10px] font-semibold text-emerald-700">{t("planner.optimalCo2")}</p>
+                                        <p className="text-[11px] font-semibold text-emerald-900">{stage.climate_co2}</p>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                                    {stage.ideal_height_cm ? (
+                                      <div className="rounded-lg border border-teal-200 bg-teal-50 px-2 py-1.5">
+                                        <p className="text-[10px] font-semibold text-teal-700">{t("planner.stageHeight")}</p>
+                                        <p className="text-sm font-bold text-teal-900">{stage.ideal_height_cm}</p>
+                                      </div>
+                                    ) : (
+                                      <div />
+                                    )}
+                                    {stage.notes ? (
+                                      <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">{t("planner.observation")}</p>
+                                        <p className="text-sm font-semibold text-slate-700">{stage.notes}</p>
+                                      </div>
+                                    ) : (
+                                      <div />
+                                    )}
+                                  </div>
+                                  {hasNutrition ? (
+                                    <div className="mt-2 grid grid-cols-3 gap-1.5">
+                                      <div className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1">
+                                        <p className="text-[10px] font-semibold text-violet-700">{t("planner.optimalNutritionEc")}</p>
+                                        <p className="text-[11px] font-semibold text-violet-900">{stage.nutrition_ec ?? "—"}</p>
+                                      </div>
+                                      <div className="rounded-lg border border-fuchsia-200 bg-fuchsia-50 px-2 py-1">
+                                        <p className="text-[10px] font-semibold text-fuchsia-700">{t("planner.optimalNutritionPh")}</p>
+                                        <p className="text-[11px] font-semibold text-fuchsia-900">{stage.nutrition_ph ?? "—"}</p>
+                                      </div>
+                                      <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1">
+                                        <p className="text-[10px] font-semibold text-indigo-700">{t("planner.optimalNutritionWaterTemp")}</p>
+                                        <p className="text-[11px] font-semibold text-indigo-900">{stage.nutrition_water_temperature ?? "—"}</p>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {hasLight ? (
+                                    <div className="mt-2 grid grid-cols-1 gap-1.5">
+                                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1">
+                                        <p className="text-[10px] font-semibold text-amber-700">{t("planner.optimalLightPpfd")}</p>
+                                        <p className="text-[11px] font-semibold text-amber-900">{stage.light_ppfd ?? "—"}</p>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {active ? (
+                                    <span className="mt-2 inline-flex animate-pulse rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                                      {t("planner.currentStage")}
+                                    </span>
+                                  ) : null}
+                                </motion.div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t("planner.noGrowthStages")}</p>
+                    )}
                   </div>
 
                   <Button

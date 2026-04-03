@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/lib/language";
 import { applySeo } from "@/lib/seo";
-import { changeRelayState, triggerEStop } from "@/lib/dashboardControlApi";
+import { changeRelayState, fetchHistoricalData, triggerEStop } from "@/lib/dashboardControlApi";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Device = {
   device_id: string;
@@ -173,6 +174,15 @@ type RealtimeApiResponse = {
 
 type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
 
+type HistoricalMetric = "temperature" | "humidity" | "co2";
+
+type HistoricalPoint = {
+  label: string;
+  temperature: number | null;
+  humidity: number | null;
+  co2: number | null;
+};
+
 function getRecordDeviceId(record: RealtimeRecord) {
   const value = record.Device_Id ?? record.device_id;
   return typeof value === "string" ? value : null;
@@ -197,6 +207,25 @@ function toMetric(value: unknown, fallback: number) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const parsed = typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toOptionalMetric(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatHistoryLabel(timestamp: string) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }
 
 function formatRelayName(key: string) {
@@ -362,7 +391,17 @@ function EnvironmentControlCard({
   );
 }
 
-function EnvironmentIntelCard({ device, realtime, t }: { device: Device; realtime?: RealtimeRecord; t: TranslateFn }) {
+function EnvironmentIntelCard({
+  device,
+  realtime,
+  t,
+  onViewGraph,
+}: {
+  device: Device;
+  realtime?: RealtimeRecord;
+  t: TranslateFn;
+  onViewGraph?: (device: Device) => void;
+}) {
   const baseSeed = seedFromString(device.device_id);
   const temperature = toMetric(realtime?.Etemp, metricFromSeed(baseSeed + 1, 20, 36));
   const humidity = toMetric(realtime?.Humidity, metricFromSeed(baseSeed + 2, 35, 88));
@@ -406,12 +445,25 @@ function EnvironmentIntelCard({ device, realtime, t }: { device: Device; realtim
           </div>
           <p className="text-2xl font-semibold text-lime-900">{co2} ppm</p>
         </div>
+        <Button className="mt-1 w-full" onClick={() => onViewGraph?.(device)}>
+          View Graph
+        </Button>
       </CardContent>
     </Card>
   );
 }
 
-function IrrigationIntelCard({ device, realtime, t }: { device: Device; realtime?: RealtimeRecord; t: TranslateFn }) {
+function IrrigationIntelCard({
+  device,
+  realtime,
+  t,
+  onViewGraph,
+}: {
+  device: Device;
+  realtime?: RealtimeRecord;
+  t: TranslateFn;
+  onViewGraph?: (device: Device) => void;
+}) {
   const baseSeed = seedFromString(device.device_id);
   const soilMoisture = toMetric(
     realtime?.Soil_Moisture ?? realtime?.soil_moisture ?? realtime?.SoilMoisture ?? realtime?.SM,
@@ -453,6 +505,9 @@ function IrrigationIntelCard({ device, realtime, t }: { device: Device; realtime
           </div>
           <p className="text-2xl font-semibold text-orange-900">{soilTemperature}°C</p>
         </div>
+        <Button className="mt-1 w-full" onClick={() => onViewGraph?.(device)}>
+          View Graph
+        </Button>
       </CardContent>
     </Card>
   );
@@ -489,6 +544,13 @@ export default function LoginDashboard() {
   const [isEStopDialogOpen, setIsEStopDialogOpen] = useState(false);
   const [selectedSolutionForEStop, setSelectedSolutionForEStop] = useState<string | null>(null);
   const [estopSolutions, setEstopSolutions] = useState<Record<string, boolean>>({});
+  const [isGraphDialogOpen, setIsGraphDialogOpen] = useState(false);
+  const [selectedGraphDevice, setSelectedGraphDevice] = useState<Device | null>(null);
+  const [selectedMetric, setSelectedMetric] = useState<HistoricalMetric>("temperature");
+  const [selectedRange, setSelectedRange] = useState<0.5 | 1 | 3>(0.5);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [graphError, setGraphError] = useState<string | null>(null);
+  const [graphData, setGraphData] = useState<HistoricalPoint[]>([]);
   const quantityByName = useMemo(() => buildDeviceCounts(devices), [devices]);
   useEffect(() => {
     if (!token || !loginResponse) {
@@ -554,6 +616,65 @@ export default function LoginDashboard() {
     return () => clearInterval(interval);
   }, [token, userId, refreshRealtimeData]);
 
+  const loadHistoricalGraph = useCallback(async () => {
+    if (!isGraphDialogOpen || !selectedGraphDevice) return;
+    if (!token || !userId || !controlApiBase) {
+      setGraphError("Missing token/user/api base");
+      setGraphData([]);
+      return;
+    }
+    setGraphLoading(true);
+    setGraphError(null);
+    try {
+      const response = (await fetchHistoricalData({
+        apiBase: controlApiBase,
+        token,
+        userId,
+        deviceId: selectedGraphDevice.device_id,
+        deviceName: selectedGraphDevice.device_name,
+        rangeValue: selectedRange,
+      })) as { data?: unknown[] };
+
+      const points = Array.isArray(response?.data)
+        ? response.data
+            .map((entry) => {
+              const row = readObject(entry);
+              const timestamp = row?.timestamp;
+              const payload = readObject(row?.payload);
+              if (typeof timestamp !== "string" || !payload) return null;
+              return {
+                label: formatHistoryLabel(timestamp),
+                temperature: toOptionalMetric(payload.Etemp ?? payload.etemp ?? payload.temperature),
+                humidity: toOptionalMetric(payload.Humidity ?? payload.humidity),
+                co2: toOptionalMetric(payload.CO2 ?? payload.co2),
+              } satisfies HistoricalPoint;
+            })
+            .filter((point): point is HistoricalPoint => Boolean(point))
+        : [];
+
+      setGraphData(points);
+    } catch (error) {
+      console.error("Historical data API failed:", error);
+      setGraphError("Could not load historical data");
+      setGraphData([]);
+    } finally {
+      setGraphLoading(false);
+    }
+  }, [isGraphDialogOpen, selectedGraphDevice, token, userId, controlApiBase, selectedRange]);
+
+  useEffect(() => {
+    loadHistoricalGraph();
+  }, [loadHistoricalGraph]);
+
+  const openGraphForDevice = (device: Device) => {
+    setSelectedGraphDevice(device);
+    setSelectedMetric("temperature");
+    setSelectedRange(0.5);
+    setGraphData([]);
+    setGraphError(null);
+    setIsGraphDialogOpen(true);
+  };
+
   const handleRelayToggle = useCallback(
     async (args: { deviceId: string; buttonName: string; state: "on" | "off" }) => {
       if (!token || !userId || !controlApiBase) {
@@ -575,13 +696,13 @@ export default function LoginDashboard() {
     const normalizedName = device.device_name.toLowerCase();
     const realtime = realtimeData[device.device_id];
     if (normalizedName.includes("enviroment_intel")) {
-      return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+      return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} onViewGraph={openGraphForDevice} />;
     }
     if (normalizedName.includes("enviroment_control")) {
       return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} onRelayToggle={handleRelayToggle} />;
     }
     if (normalizedName.includes("irrigation_intel")) {
-      return <IrrigationIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+      return <IrrigationIntelCard key={device.device_id} device={device} realtime={realtime} t={t} onViewGraph={openGraphForDevice} />;
     }
     if (normalizedName.includes("irrigation_control")) {
       return <EnvironmentControlCard key={device.device_id} device={device} realtime={realtime} t={t} onRelayToggle={handleRelayToggle} />;
@@ -612,7 +733,7 @@ export default function LoginDashboard() {
     const realtime = realtimeData[device.device_id];
 
     if (normalizedName.includes("enviroment_intel")) {
-      return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+      return <EnvironmentIntelCard key={device.device_id} device={device} realtime={realtime} t={t} onViewGraph={openGraphForDevice} />;
     }
     if (normalizedName.includes("enviroment_control")) {
       return (
@@ -627,7 +748,7 @@ export default function LoginDashboard() {
       );
     }
     if (normalizedName.includes("irrigation_intel")) {
-      return <IrrigationIntelCard key={device.device_id} device={device} realtime={realtime} t={t} />;
+      return <IrrigationIntelCard key={device.device_id} device={device} realtime={realtime} t={t} onViewGraph={openGraphForDevice} />;
     }
     if (normalizedName.includes("irrigation_control")) {
       return (
@@ -689,6 +810,26 @@ export default function LoginDashboard() {
       setIsEStopSubmitting(false);
     }
   };
+
+  const metricConfig: Record<HistoricalMetric, { label: string; key: keyof HistoricalPoint; color: string; unit: string }> = {
+    temperature: { label: t("dashboard.temperature"), key: "temperature", color: "#10b981", unit: "°C" },
+    humidity: { label: t("dashboard.humidity"), key: "humidity", color: "#0ea5e9", unit: "%" },
+    co2: { label: t("dashboard.co2"), key: "co2", color: "#84cc16", unit: "ppm" },
+  };
+
+  const activeMetric = metricConfig[selectedMetric];
+  const latestTemperature = [...graphData]
+    .reverse()
+    .map((item) => item.temperature)
+    .find((value): value is number => typeof value === "number");
+  const latestHumidity = [...graphData]
+    .reverse()
+    .map((item) => item.humidity)
+    .find((value): value is number => typeof value === "number");
+  const latestCo2 = [...graphData]
+    .reverse()
+    .map((item) => item.co2)
+    .find((value): value is number => typeof value === "number");
 
   return (
     <div className="space-y-6">
@@ -809,6 +950,114 @@ export default function LoginDashboard() {
           <Button variant="destructive" className="w-full" onClick={handleConfirmEStop} disabled={isEStopSubmitting}>
             {t("dashboard.stop")}
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isGraphDialogOpen} onOpenChange={setIsGraphDialogOpen}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-3xl font-semibold">
+              {selectedGraphDevice?.device_name ?? "Sensor"} Trends
+            </DialogTitle>
+            <DialogDescription>
+              {selectedGraphDevice?.device_id}
+              {selectedGraphDevice?.deployed_at ? ` • ${selectedGraphDevice.deployed_at}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 md:grid-cols-5">
+            <div className="rounded-xl border bg-muted/35 p-3">
+              <p className="text-xs text-muted-foreground">Current Temperature</p>
+              <p className="text-3xl font-semibold">
+                {latestTemperature ?? "--"}
+                <span className="ml-1 text-lg text-muted-foreground">°C</span>
+              </p>
+            </div>
+            <div className="rounded-xl border bg-muted/35 p-3">
+              <p className="text-xs text-muted-foreground">Current Humidity</p>
+              <p className="text-3xl font-semibold">
+                {latestHumidity ?? "--"}
+                <span className="ml-1 text-lg text-muted-foreground">%</span>
+              </p>
+            </div>
+            <div className="rounded-xl border bg-muted/35 p-3">
+              <p className="text-xs text-muted-foreground">Current CO2</p>
+              <p className="text-3xl font-semibold">
+                {latestCo2 ?? "--"}
+                <span className="ml-1 text-lg text-muted-foreground">ppm</span>
+              </p>
+            </div>
+            <div className="rounded-xl border bg-muted/35 p-3">
+              <p className="text-xs text-muted-foreground">Selected Range</p>
+              <p className="text-3xl font-semibold">{selectedRange}D</p>
+            </div>
+            <div className="rounded-xl border bg-muted/35 p-3">
+              <p className="text-xs text-muted-foreground">Data Points</p>
+              <p className="text-3xl font-semibold">{graphData.length}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {(["temperature", "humidity", "co2"] as HistoricalMetric[]).map((metric) => (
+                <Button
+                  key={metric}
+                  type="button"
+                  variant={selectedMetric === metric ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedMetric(metric)}
+                >
+                  {metricConfig[metric].label}
+                </Button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {([0.5, 1, 3] as const).map((range) => (
+                <Button
+                  key={range}
+                  type="button"
+                  variant={selectedRange === range ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedRange(range)}
+                >
+                  {range}D
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-[360px] rounded-2xl border border-border/70 bg-background p-3">
+            {graphLoading ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading graph...</div>
+            ) : graphError ? (
+              <div className="flex h-full items-center justify-center text-sm text-destructive">{graphError}</div>
+            ) : graphData.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No historical data available.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={graphData}>
+                  <defs>
+                    <linearGradient id="graphFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={activeMetric.color} stopOpacity={0.35} />
+                      <stop offset="95%" stopColor={activeMetric.color} stopOpacity={0.03} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#dbe4ee" />
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} minTickGap={16} />
+                  <YAxis tick={{ fontSize: 12 }} width={48} />
+                  <Tooltip />
+                  <Area
+                    type="monotone"
+                    dataKey={activeMetric.key}
+                    stroke={activeMetric.color}
+                    strokeWidth={2.5}
+                    fill="url(#graphFill)"
+                    connectNulls
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
