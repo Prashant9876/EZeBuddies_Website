@@ -389,12 +389,17 @@ export type SinchaiSchedule = {
   valves: string[];
   days: string[];
   enabled: boolean;
+  ec_lower_limit?: number | null;
+  ec_upper_limit?: number | null;
+  ph_lower_limit?: number | null;
+  ph_upper_limit?: number | null;
 };
 
 export type SinchaiPlannerDocument = {
   user_id: string;
   mode: string;
   no_of_valves: number;
+  fertigation_time_min: number | null;
   schedules: SinchaiSchedule[];
 };
 
@@ -441,6 +446,10 @@ function normalizeSinchaiSchedules(source: unknown) {
         valves: asStringArray(row.valves ?? row.zones ?? row.lines),
         days: asStringArray(row.days ?? row.repeat_days ?? row.weekdays),
         enabled,
+        ec_lower_limit: asNumberLoose(row.ec_lower_limit ?? row.ecLowerLimit ?? row.ec_min ?? row.ecMin),
+        ec_upper_limit: asNumberLoose(row.ec_upper_limit ?? row.ecUpperLimit ?? row.ec_max ?? row.ecMax),
+        ph_lower_limit: asNumberLoose(row.ph_lower_limit ?? row.phLowerLimit ?? row.ph_min ?? row.phMin),
+        ph_upper_limit: asNumberLoose(row.ph_upper_limit ?? row.phUpperLimit ?? row.ph_max ?? row.phMax),
       } satisfies SinchaiSchedule;
     })
     .filter((item): item is SinchaiSchedule => Boolean(item));
@@ -476,6 +485,7 @@ function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerD
   const mode = asString(obj.mode) ?? asString(obj.irrigation_mode) ?? asString(obj.control_mode) ?? "Auto";
   const payloadUserId = asString(obj.user_id) ?? asString(obj.userId) ?? userId;
   const noOfValves = asNumberLoose(obj.No_of_valves ?? obj.no_of_valves ?? obj.valves_count) ?? 6;
+  const fertigationTime = asNumberLoose(obj.fertigation_time_min ?? obj.fertigationTimeMin ?? obj.fertigation_time);
 
   if (schedules.length === 0 && !Array.isArray(obj.schedules) && !Array.isArray(obj.schedule) && !Array.isArray(obj.items)) {
     return null;
@@ -485,6 +495,7 @@ function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerD
     user_id: payloadUserId,
     mode,
     no_of_valves: Math.max(1, Math.trunc(noOfValves)),
+    fertigation_time_min: fertigationTime !== null ? Math.max(0, fertigationTime) : null,
     schedules,
   };
 }
@@ -550,6 +561,7 @@ export async function saveSinchaiPlanner(args: {
   userId: string;
   mode: string;
   noOfValves: number;
+  fertigationTimeMin: number | null;
   schedules: SinchaiSchedule[];
 }) {
   const endpoint = resolveSinchaiPlannerSaveEndpoint();
@@ -561,6 +573,7 @@ export async function saveSinchaiPlanner(args: {
     user_id: args.userId,
     mode: args.mode,
     No_of_valves: Math.max(1, Math.trunc(args.noOfValves)),
+    fertigation_time_min: args.fertigationTimeMin,
     schedules: args.schedules,
   };
 

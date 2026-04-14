@@ -78,19 +78,52 @@ export function PostLoginLayout() {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const token = useMemo(() => getStoredAuthToken(), []);
   const loginResponse = useMemo(() => getStoredLoginResponse(), []);
-  const userInfo =
-    loginResponse?.user && typeof loginResponse.user === "object" && !Array.isArray(loginResponse.user)
-      ? (loginResponse.user as Record<string, unknown>)
+  const dataInfo =
+    loginResponse?.data && typeof loginResponse.data === "object" && !Array.isArray(loginResponse.data)
+      ? (loginResponse.data as Record<string, unknown>)
       : null;
-  const userId = pickString(loginResponse?.user_id, userInfo?.user_id, userInfo?.id) ?? t("dashboard.notAvailable");
-  const email = pickString(loginResponse?.email, userInfo?.email) ?? t("dashboard.notAvailable");
-  const phone = pickString(loginResponse?.phone, userInfo?.phone, userInfo?.mobile, userInfo?.contact_number) ?? t("dashboard.notAvailable");
+  const userInfo =
+    (loginResponse?.user && typeof loginResponse.user === "object" && !Array.isArray(loginResponse.user)
+      ? (loginResponse.user as Record<string, unknown>)
+      : null) ??
+    (dataInfo?.user && typeof dataInfo.user === "object" && !Array.isArray(dataInfo.user)
+      ? (dataInfo.user as Record<string, unknown>)
+      : null);
+  const userId =
+    pickString(loginResponse?.user_id, dataInfo?.user_id, userInfo?.user_id, userInfo?.id, userInfo?.userId) ?? t("dashboard.notAvailable");
+  const email = pickString(loginResponse?.email, dataInfo?.email, userInfo?.email) ?? t("dashboard.notAvailable");
+  const phone =
+    pickString(
+      loginResponse?.phone,
+      loginResponse?.Phone,
+      dataInfo?.phone,
+      dataInfo?.Phone,
+      userInfo?.phone,
+      userInfo?.Phone,
+      userInfo?.mobile,
+      userInfo?.mobile_number,
+      userInfo?.phone_number,
+      userInfo?.contact_number,
+      userInfo?.contactNumber,
+    ) ?? t("dashboard.notAvailable");
   const farmLocation =
     pickString(
       loginResponse?.farm_location,
+      loginResponse?.Farm_location,
+      loginResponse?.farmLocation,
+      loginResponse?.FarmLocation,
       loginResponse?.location,
       loginResponse?.address,
+      dataInfo?.farm_location,
+      dataInfo?.Farm_location,
+      dataInfo?.farmLocation,
+      dataInfo?.FarmLocation,
+      dataInfo?.location,
+      dataInfo?.address,
       userInfo?.farm_location,
+      userInfo?.Farm_location,
+      userInfo?.farmLocation,
+      userInfo?.FarmLocation,
       userInfo?.location,
       userInfo?.address,
     ) ?? t("dashboard.notAvailable");

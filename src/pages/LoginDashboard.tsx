@@ -596,11 +596,13 @@ function SinchaiSummaryCard({
   schedules,
   t,
   loading,
+  fertigationTimeMin,
 }: {
   mode: string;
   schedules: SinchaiSchedule[];
   t: TranslateFn;
   loading: boolean;
+  fertigationTimeMin: number | null;
 }) {
   const enabledCount = schedules.filter((item) => item.enabled).length;
   return (
@@ -612,7 +614,7 @@ function SinchaiSummaryCard({
         </p>
       </div>
       <CardContent className="space-y-4 p-5">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-cyan-100 bg-cyan-50/70 p-3">
             <p className="text-xs text-cyan-700">{t("dashboard.totalSchedules")}</p>
             <p className="text-2xl font-semibold text-cyan-900">{schedules.length}</p>
@@ -624,6 +626,10 @@ function SinchaiSummaryCard({
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <p className="text-xs text-slate-600">{t("dashboard.disabledSchedules")}</p>
             <p className="text-2xl font-semibold text-slate-900">{Math.max(0, schedules.length - enabledCount)}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3">
+            <p className="text-xs text-emerald-700">{t("sinchaiPlanner.fertigationTimeMin")}</p>
+            <p className="text-2xl font-semibold text-emerald-900">{fertigationTimeMin ?? "--"}</p>
           </div>
         </div>
 
@@ -733,6 +739,7 @@ export default function LoginDashboard() {
   const [weatherData, setWeatherData] = useState<WeatherSnapshot | null>(null);
   const [sinchaiSchedules, setSinchaiSchedules] = useState<SinchaiSchedule[]>([]);
   const [sinchaiMode, setSinchaiMode] = useState("Auto");
+  const [sinchaiFertigationTimeMin, setSinchaiFertigationTimeMin] = useState<number | null>(null);
   const [sinchaiLoading, setSinchaiLoading] = useState(false);
 
   const weatherLocationQuery = useMemo(() => {
@@ -833,11 +840,13 @@ export default function LoginDashboard() {
         if (!mounted) return;
         setSinchaiMode(data?.mode || "Auto");
         setSinchaiSchedules(data?.schedules ?? []);
+        setSinchaiFertigationTimeMin(typeof data?.fertigation_time_min === "number" ? data.fertigation_time_min : null);
       } catch (error) {
         console.error("Sinchai planner summary fetch failed:", error);
         if (!mounted) return;
         setSinchaiMode("Auto");
         setSinchaiSchedules([]);
+        setSinchaiFertigationTimeMin(null);
       } finally {
         if (mounted) setSinchaiLoading(false);
       }
@@ -1307,63 +1316,76 @@ export default function LoginDashboard() {
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-base font-bold text-slate-900">
-                      {t("dashboard.weatherRainChance")}:{" "}
-                      {typeof weatherData.current.cloud === "number"
-                        ? weatherData.current.cloud >= 70
-                          ? t("dashboard.weatherRainChanceHigh")
-                          : weatherData.current.cloud >= 35
-                            ? t("dashboard.weatherRainChanceMedium")
-                            : t("dashboard.weatherRainChanceLow")
-                        : "--"}
-                    </p>
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-700">{t("dashboard.weatherForecast")}</h3>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      {weatherData.daily.map((day) => (
-                        <div key={day.date} className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white to-sky-50/60 p-3 shadow-[0_10px_22px_-18px_rgba(2,105,170,0.5)]">
-                          <p className="text-sm font-semibold text-slate-800">{day.date}</p>
-                          <p className="mt-1 text-sm">
-                            <span className="font-medium">{t("dashboard.temperature")}:</span> {day.max ?? "--"}° / {day.min ?? "--"}°
-                          </p>
-                          <p className="text-sm">
-                            <span className="font-medium">{t("dashboard.weatherUvMax")}:</span> {day.uvMax ?? "--"}
-                          </p>
-                          <p className="text-sm">
-                            <span className="font-medium">{t("dashboard.humidity")}:</span> {day.humidityAvg ?? "--"}%
-                          </p>
-                          <p className="text-sm">
-                            <span className="font-medium">{t("dashboard.weatherRain")}:</span> {day.precipitationSum ?? "--"} mm
-                          </p>
-                          <p className="text-sm">
-                            <span className="font-medium">{t("dashboard.weatherCloud")}:</span> {day.cloudAvg ?? "--"}%
-                          </p>
-                          <p className="mt-1 text-sm">
-                            <span className="font-medium">{t("dashboard.weatherRainChance")}:</span>{" "}
-                            {typeof day.precipitationProbMax === "number" ? (
-                              <span className="font-bold text-slate-900">
-                                {day.precipitationProbMax >= 70
-                                  ? t("dashboard.weatherRainChanceHigh")
-                                  : day.precipitationProbMax >= 35
-                                    ? t("dashboard.weatherRainChanceMedium")
-                                    : t("dashboard.weatherRainChanceLow")}
-                                {` (${day.precipitationProbMax}%)`}
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-700">{t("dashboard.weatherForecast")}</h3>
+                      <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800">
+                        {t("dashboard.weatherRainChance")}:{" "}
+                        <span className="ml-1 font-bold">
+                          {typeof weatherData.current.cloud === "number"
+                            ? weatherData.current.cloud >= 70
+                              ? t("dashboard.weatherRainChanceHigh")
+                              : weatherData.current.cloud >= 35
+                                ? t("dashboard.weatherRainChanceMedium")
+                                : t("dashboard.weatherRainChanceLow")
+                            : "--"}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {weatherData.daily.map((day) => {
+                        const rainLabel =
+                          typeof day.precipitationProbMax === "number"
+                            ? day.precipitationProbMax >= 70
+                              ? t("dashboard.weatherRainChanceHigh")
+                              : day.precipitationProbMax >= 35
+                                ? t("dashboard.weatherRainChanceMedium")
+                                : t("dashboard.weatherRainChanceLow")
+                            : "--";
+                        return (
+                          <div
+                            key={day.date}
+                            className="flex h-full flex-col gap-2 rounded-xl border border-sky-200/80 bg-gradient-to-br from-white to-sky-50/60 p-2.5 shadow-[0_8px_18px_-14px_rgba(2,105,170,0.45)]"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-slate-800">{day.date}</p>
+                              <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                                {rainLabel}
+                                {typeof day.precipitationProbMax === "number" ? ` (${day.precipitationProbMax}%)` : ""}
                               </span>
-                            ) : (
-                              "--"
-                            )}
-                          </p>
-                          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="inline-flex items-center gap-1">
-                              <Sunrise className="h-3.5 w-3.5" />
-                              {day.sunrise ?? "--"}
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              <Sunset className="h-3.5 w-3.5" />
-                              {day.sunset ?? "--"}
-                            </span>
+                            </div>
+
+                            <p className="text-lg font-bold leading-none text-slate-900">
+                              {day.max ?? "--"}° <span className="text-sm font-medium text-slate-500">/ {day.min ?? "--"}°</span>
+                            </p>
+
+                            <div className="flex flex-wrap gap-1.5">
+                              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                                {t("dashboard.weatherUvMax")}: {day.uvMax ?? "--"}
+                              </span>
+                              <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-medium text-cyan-800">
+                                {t("dashboard.humidity")}: {day.humidityAvg ?? "--"}%
+                              </span>
+                              <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-800">
+                                {t("dashboard.weatherRain")}: {day.precipitationSum ?? "--"} mm
+                              </span>
+                              <span className="rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                                {t("dashboard.weatherCloud")}: {day.cloudAvg ?? "--"}%
+                              </span>
+                            </div>
+
+                            <div className="mt-auto flex items-center justify-between text-[11px] text-muted-foreground">
+                              <span className="inline-flex items-center gap-1">
+                                <Sunrise className="h-3.5 w-3.5" />
+                                {day.sunrise ?? "--"}
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <Sunset className="h-3.5 w-3.5" />
+                                {day.sunset ?? "--"}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1409,7 +1431,13 @@ export default function LoginDashboard() {
                     <div className="space-y-3">
                       <div className="grid gap-5">
                         <div className="w-full">
-                        <SinchaiSummaryCard mode={sinchaiMode} schedules={sinchaiSchedules} t={t} loading={sinchaiLoading} />
+                        <SinchaiSummaryCard
+                          mode={sinchaiMode}
+                          schedules={sinchaiSchedules}
+                          fertigationTimeMin={sinchaiFertigationTimeMin}
+                          t={t}
+                          loading={sinchaiLoading}
+                        />
                         </div>
                       </div>
                     </div>

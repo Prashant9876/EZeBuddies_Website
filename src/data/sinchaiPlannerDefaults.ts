@@ -15,6 +15,9 @@ export function buildDefaultSinchaiSchedule(scheduleNo: number) {
     valves: [sinchaiValveOptions[0]],
     days: ["Mon", "Wed", "Fri"] as SinchaiDay[],
     enabled: true,
+    ec_lower_limit: null,
+    ec_upper_limit: null,
+    ph_lower_limit: null,
+    ph_upper_limit: null,
   };
 }
-
