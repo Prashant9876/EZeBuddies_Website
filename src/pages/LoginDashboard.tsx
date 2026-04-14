@@ -597,24 +597,24 @@ function SinchaiSummaryCard({
   t,
   loading,
   fertigationTimeMin,
+  onOpenPlanner,
 }: {
   mode: string;
   schedules: SinchaiSchedule[];
   t: TranslateFn;
   loading: boolean;
   fertigationTimeMin: number | null;
+  onOpenPlanner: () => void;
 }) {
   const enabledCount = schedules.filter((item) => item.enabled).length;
+  const isManualMode = mode.toLowerCase() === "manual";
   return (
     <Card className="hover-lift overflow-hidden border-cyan-200/70 shadow-[0_14px_38px_-20px_rgba(10,130,145,0.58)]">
       <div className="bg-gradient-to-r from-cyan-500 to-teal-600 px-5 py-4 text-white">
         <h3 className="font-display text-xl font-semibold">{t("dashboard.sinchaiSummaryTitle")}</h3>
-        <p className="mt-1 text-xs text-white/85">
-          {t("dashboard.mode")}: <span className="font-semibold">{mode}</span>
-        </p>
       </div>
       <CardContent className="space-y-4 p-5">
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-xl border border-cyan-100 bg-cyan-50/70 p-3">
             <p className="text-xs text-cyan-700">{t("dashboard.totalSchedules")}</p>
             <p className="text-2xl font-semibold text-cyan-900">{schedules.length}</p>
@@ -623,6 +623,35 @@ function SinchaiSummaryCard({
             <p className="text-xs text-emerald-700">{t("dashboard.enabledSchedules")}</p>
             <p className="text-2xl font-semibold text-emerald-900">{enabledCount}</p>
           </div>
+          <motion.div
+            className={`rounded-xl border p-3 ${
+              isManualMode
+                ? "border-amber-200 bg-amber-50/80"
+                : "border-sky-200 bg-sky-50/70"
+            }`}
+            animate={
+              isManualMode
+                ? {
+                    scale: [1, 1.02, 1],
+                    boxShadow: [
+                      "0 0 0 rgba(251,191,36,0)",
+                      "0 0 0 6px rgba(251,191,36,0.18)",
+                      "0 0 0 rgba(251,191,36,0)",
+                    ],
+                  }
+                : { scale: 1, boxShadow: "0 0 0 rgba(0,0,0,0)" }
+            }
+            transition={{ duration: 1.2, repeat: isManualMode ? Infinity : 0, ease: "easeInOut" }}
+          >
+            <p className="text-xs text-slate-700">{t("dashboard.mode")}</p>
+            <p
+              className={`text-xl leading-tight ${
+                isManualMode ? "font-black text-amber-700" : "font-semibold text-sky-900"
+              }`}
+            >
+              {t("dashboard.mode")}: {mode}
+            </p>
+          </motion.div>
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <p className="text-xs text-slate-600">{t("dashboard.disabledSchedules")}</p>
             <p className="text-2xl font-semibold text-slate-900">{Math.max(0, schedules.length - enabledCount)}</p>
@@ -638,12 +667,29 @@ function SinchaiSummaryCard({
         ) : schedules.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("dashboard.noSchedules")}</p>
         ) : (
-          <div className="pb-1">
+          <div className="relative pb-1">
+            {isManualMode && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/55 p-3">
+                <motion.div
+                  initial={{ opacity: 0.7, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="max-w-xl rounded-xl border border-amber-200 bg-white/95 p-4 text-center shadow-lg backdrop-blur-sm"
+                >
+                  <p className="text-sm font-bold text-amber-800">{t("dashboard.sinchaiManualOverlayMessage")}</p>
+                  <Button type="button" size="sm" className="mt-3" onClick={onOpenPlanner}>
+                    {t("dashboard.openSinchaiPlanner")}
+                  </Button>
+                </motion.div>
+              </div>
+            )}
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {schedules.map((schedule) => (
                 <div
                   key={`sinchai-summary-${schedule.schedule_no}`}
-                  className="rounded-xl border border-cyan-200/70 bg-gradient-to-br from-white to-cyan-50/60 p-3 shadow-[0_10px_24px_-18px_rgba(8,105,150,0.6)]"
+                  className={`rounded-xl border border-cyan-200/70 bg-gradient-to-br from-white to-cyan-50/60 p-3 shadow-[0_10px_24px_-18px_rgba(8,105,150,0.6)] ${
+                    isManualMode ? "blur-[1px]" : ""
+                  }`}
                 >
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-900">{schedule.schedule_name || `Schedule ${schedule.schedule_no}`}</p>
@@ -1437,6 +1483,7 @@ export default function LoginDashboard() {
                           fertigationTimeMin={sinchaiFertigationTimeMin}
                           t={t}
                           loading={sinchaiLoading}
+                          onOpenPlanner={() => navigate("/dashboard/sinchai-planner")}
                         />
                         </div>
                       </div>
