@@ -380,3 +380,209 @@ export async function updatePlannerDevice(args: {
 
   return data;
 }
+
+export type SinchaiSchedule = {
+  schedule_no: number;
+  schedule_name: string;
+  start_time: string;
+  irrigation_duration_min: number | null;
+  valves: string[];
+  days: string[];
+  enabled: boolean;
+};
+
+export type SinchaiPlannerDocument = {
+  user_id: string;
+  mode: string;
+  no_of_valves: number;
+  schedules: SinchaiSchedule[];
+};
+
+function asBooleanLoose(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1" || normalized === "on" || normalized === "enabled" || normalized === "auto") return true;
+    if (normalized === "false" || normalized === "0" || normalized === "off" || normalized === "disabled" || normalized === "manual") return false;
+  }
+  return null;
+}
+
+function asNumberLoose(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function asStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => asString(item)).filter((item): item is string => Boolean(item?.trim())).map((item) => item.trim());
+}
+
+function normalizeSinchaiSchedules(source: unknown) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((item, index) => {
+      const row = readObject(item);
+      if (!row) return null;
+      const numberValue = asNumberLoose(row.schedule_no ?? row.scheduleNo ?? row.id);
+      const scheduleNo = numberValue !== null ? Math.max(1, Math.trunc(numberValue)) : index + 1;
+      const duration = asNumberLoose(row.irrigation_duration_min ?? row.duration_min ?? row.duration);
+      const enabled = asBooleanLoose(row.enabled ?? row.is_enabled ?? row.status) ?? true;
+      return {
+        schedule_no: scheduleNo,
+        schedule_name: asString(row.schedule_name) ?? asString(row.name) ?? `Schedule ${index + 1}`,
+        start_time: asString(row.start_time) ?? asString(row.time) ?? "",
+        irrigation_duration_min: duration !== null ? Math.max(0, Math.trunc(duration)) : null,
+        valves: asStringArray(row.valves ?? row.zones ?? row.lines),
+        days: asStringArray(row.days ?? row.repeat_days ?? row.weekdays),
+        enabled,
+      } satisfies SinchaiSchedule;
+    })
+    .filter((item): item is SinchaiSchedule => Boolean(item));
+}
+
+function extractSinchaiObject(data: unknown) {
+  const direct = readObject(data);
+  if (!direct) return null;
+
+  const candidates = [
+    direct,
+    readObject(direct.data),
+    readObject(direct.record),
+    readObject(direct.payload),
+    readObject(direct.planner),
+    readObject(direct.result),
+    readObject(direct.document),
+  ].filter((item): item is Record<string, unknown> => Boolean(item));
+
+  return candidates.find((item) => {
+    if (Array.isArray(item.schedules)) return true;
+    if (Array.isArray(item.schedule)) return true;
+    if (Array.isArray(item.items)) return true;
+    return false;
+  }) ?? candidates[0];
+}
+
+function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerDocument | null {
+  const obj = extractSinchaiObject(data);
+  if (!obj) return null;
+
+  const schedules = normalizeSinchaiSchedules(obj.schedules ?? obj.schedule ?? obj.items);
+  const mode = asString(obj.mode) ?? asString(obj.irrigation_mode) ?? asString(obj.control_mode) ?? "Auto";
+  const payloadUserId = asString(obj.user_id) ?? asString(obj.userId) ?? userId;
+  const noOfValves = asNumberLoose(obj.No_of_valves ?? obj.no_of_valves ?? obj.valves_count) ?? 6;
+
+  if (schedules.length === 0 && !Array.isArray(obj.schedules) && !Array.isArray(obj.schedule) && !Array.isArray(obj.items)) {
+    return null;
+  }
+
+  return {
+    user_id: payloadUserId,
+    mode,
+    no_of_valves: Math.max(1, Math.trunc(noOfValves)),
+    schedules,
+  };
+}
+
+function resolveSinchaiPlannerFetchEndpoint() {
+  const explicit = import.meta.env.VITE_SINCHAI_PLANNER_GET_API_URL?.trim();
+  if (explicit) return explicit;
+
+  const apiBase = resolveSopApiBase();
+  if (apiBase) return `${apiBase.replace(/\/$/, "")}/get_sinchai_planer`;
+
+  return "";
+}
+
+function resolveSinchaiPlannerSaveEndpoint() {
+  const explicit = import.meta.env.VITE_SINCHAI_PLANNER_SAVE_API_URL?.trim();
+  if (explicit) return explicit;
+
+  const apiBase = resolveSopApiBase();
+  if (apiBase) return `${apiBase.replace(/\/$/, "")}/update_sinchai_planer`;
+
+  return "";
+}
+
+export async function fetchSinchaiPlanner(args: {
+  token: string;
+  userId: string;
+  section?: string;
+}) {
+  const endpoint = resolveSinchaiPlannerFetchEndpoint();
+  if (!endpoint) {
+    throw new Error("Missing Sinchai planner API endpoint");
+  }
+
+  const url = new URL(endpoint);
+  url.searchParams.set("token_type", "bearer");
+  url.searchParams.set("user_id", args.userId);
+  url.searchParams.set("section", args.section ?? "user_sinchai_planner");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${args.token}`,
+    },
+  });
+
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Sinchai planner API failed (${response.status})`);
+  }
+
+  return normalizeSinchaiPlanner(data, args.userId);
+}
+
+export async function saveSinchaiPlanner(args: {
+  token: string;
+  userId: string;
+  mode: string;
+  noOfValves: number;
+  schedules: SinchaiSchedule[];
+}) {
+  const endpoint = resolveSinchaiPlannerSaveEndpoint();
+  if (!endpoint) {
+    throw new Error("Missing Sinchai planner save API endpoint");
+  }
+
+  const body: Record<string, unknown> = {
+    user_id: args.userId,
+    mode: args.mode,
+    No_of_valves: Math.max(1, Math.trunc(args.noOfValves)),
+    schedules: args.schedules,
+  };
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${args.token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Sinchai planner save API failed (${response.status})`);
+  }
+
+  return data;
+}
