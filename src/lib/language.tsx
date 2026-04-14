@@ -158,6 +158,8 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     "dashboard.enabledSchedules": "Enabled",
     "dashboard.disabledSchedules": "Disabled",
     "dashboard.noSchedules": "No schedules available yet.",
+    "dashboard.sinchaiManualOverlayMessage": "Please switch the system to Auto mode to enable scheduled operations.",
+    "dashboard.openSinchaiPlanner": "Open Sinchai Planner",
 
     "planner.loading": "Loading planner data...",
     "planner.noSensorsTitle": "No sensors found",
@@ -396,6 +398,8 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     "dashboard.enabledSchedules": "सक्रिय",
     "dashboard.disabledSchedules": "निष्क्रिय",
     "dashboard.noSchedules": "अभी कोई शेड्यूल उपलब्ध नहीं है।",
+    "dashboard.sinchaiManualOverlayMessage": "शेड्यूल चलाने के लिए मोड को ऑटो मोड में बदलें।",
+    "dashboard.openSinchaiPlanner": "सिंचाई प्लानर खोलें",
 
     "planner.loading": "प्लानर डेटा लोड हो रहा है...",
     "planner.noSensorsTitle": "कोई सेंसर नहीं मिला",
