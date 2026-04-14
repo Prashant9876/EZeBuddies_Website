@@ -69,6 +69,38 @@ export async function triggerEStop(args: {
   });
 }
 
+export async function resetManualLog(args: {
+  apiBase: string;
+  token: string;
+  userId: string;
+  farmId: string;
+}) {
+  const url = `${args.apiBase.replace(/\/$/, "")}/reset_manual_log`;
+  return postJson(url, args.token, {
+    user_id: args.userId,
+    farmid: args.farmId,
+  });
+}
+
+export async function startManualIrrigation(args: {
+  apiBase: string;
+  token: string;
+  userId: string;
+  farmId: string;
+  timestamp: string;
+  durationMin: number;
+  valves: string[];
+}) {
+  const url = `${args.apiBase.replace(/\/$/, "")}/start_manual_Irrigation`;
+  return postJson(url, args.token, {
+    user_id: args.userId,
+    farmid: args.farmId,
+    timestamp: args.timestamp,
+    duration_min: args.durationMin,
+    valves: args.valves,
+  });
+}
+
 export async function fetchHistoricalData(args: {
   apiBase: string;
   token: string;

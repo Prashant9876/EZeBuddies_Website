@@ -14,6 +14,7 @@ interface ImportMetaEnv {
   readonly VITE_SINCHAI_PLANNER_API_URL: string;
   readonly VITE_SINCHAI_PLANNER_SAVE_API_URL: string;
   readonly VITE_SINCHAI_PLANNER_GET_API_URL: string;
+  readonly VITE_MANUAL_LOG_FARM_ID: string;
 }
 
 interface ImportMeta {

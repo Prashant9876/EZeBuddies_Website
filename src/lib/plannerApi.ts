@@ -400,6 +400,11 @@ export type SinchaiPlannerDocument = {
   mode: string;
   no_of_valves: number;
   fertigation_time_min: number | null;
+  manual_log?: {
+    timestamp: string;
+    duration_min: number;
+    valves: string[];
+  } | null;
   schedules: SinchaiSchedule[];
 };
 
@@ -486,6 +491,18 @@ function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerD
   const payloadUserId = asString(obj.user_id) ?? asString(obj.userId) ?? userId;
   const noOfValves = asNumberLoose(obj.No_of_valves ?? obj.no_of_valves ?? obj.valves_count) ?? 6;
   const fertigationTime = asNumberLoose(obj.fertigation_time_min ?? obj.fertigationTimeMin ?? obj.fertigation_time);
+  const manualLogObj = readObject(obj.manual_log ?? obj.manualLog);
+  const manualTimestamp = asString(manualLogObj?.timestamp);
+  const manualDuration = asNumberLoose(manualLogObj?.duration_min ?? manualLogObj?.durationMin);
+  const manualValves = asStringArray(manualLogObj?.valves);
+  const manualLog =
+    manualTimestamp && manualDuration !== null
+      ? {
+          timestamp: manualTimestamp,
+          duration_min: Math.max(0, Math.trunc(manualDuration)),
+          valves: manualValves,
+        }
+      : null;
 
   if (schedules.length === 0 && !Array.isArray(obj.schedules) && !Array.isArray(obj.schedule) && !Array.isArray(obj.items)) {
     return null;
@@ -496,6 +513,7 @@ function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerD
     mode,
     no_of_valves: Math.max(1, Math.trunc(noOfValves)),
     fertigation_time_min: fertigationTime !== null ? Math.max(0, fertigationTime) : null,
+    manual_log: manualLog,
     schedules,
   };
 }

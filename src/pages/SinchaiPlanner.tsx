@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, Save, Trash2, FlaskConical } from "lucide-react";
+import { Plus, Save, Trash2, FlaskConical, Play, Square } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getStoredAuthToken, getStoredLoginResponse } from "@/lib/auth";
 import { applySeo } from "@/lib/seo";
 import { fetchSinchaiPlanner, saveSinchaiPlanner, type SinchaiSchedule } from "@/lib/plannerApi";
+import { resetManualLog, startManualIrrigation, triggerEStop } from "@/lib/dashboardControlApi";
 import { buildDefaultSinchaiSchedule, sinchaiDayOptions, sinchaiValveOptions } from "@/data/sinchaiPlannerDefaults";
 import { useLanguage } from "@/lib/language";
 
@@ -28,6 +29,22 @@ function asString(value: unknown) {
 
 function normalizeMode(value: string): PlannerMode {
   return value.trim().toLowerCase() === "manual" ? "Manual" : "Auto";
+}
+
+function resolveApiBase(...candidates: Array<string | undefined>) {
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (!value) continue;
+    try {
+      if (value.startsWith("http://") || value.startsWith("https://")) {
+        return new URL(value).origin;
+      }
+      return value;
+    } catch {
+      continue;
+    }
+  }
+  return "";
 }
 
 function normalizeScheduleNumbers(schedules: SinchaiSchedule[]) {
@@ -123,9 +140,25 @@ function parseNullableNumber(value: string) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function validatePlannerBeforeSave(fertigationTimeMin: number | null, schedules: SinchaiSchedule[], t: (key: string) => string) {
+function isManualLogRunning(timestamp: string, durationMin: number) {
+  const start = new Date(timestamp);
+  if (Number.isNaN(start.getTime())) return false;
+  const end = new Date(start.getTime() + Math.max(0, durationMin) * 60 * 1000);
+  return end.getTime() >= Date.now();
+}
+
+function validatePlannerBeforeSave(
+  mode: PlannerMode,
+  fertigationTimeMin: number | null,
+  schedules: SinchaiSchedule[],
+  t: (key: string) => string,
+) {
   if (fertigationTimeMin === null) {
     return t("sinchaiPlanner.validationFertigation");
+  }
+
+  if (mode === "Manual") {
+    return null;
   }
 
   for (const schedule of schedules) {
@@ -170,6 +203,24 @@ export default function SinchaiPlanner() {
     const userObj = readObject(loginResponse?.user);
     return asString(loginResponse?.name) || asString(userObj?.name) || userId || "User";
   }, [loginResponse, userId]);
+  const farmId = useMemo(() => {
+    const userObj = readObject(loginResponse?.user);
+    const dataObj = readObject(loginResponse?.data);
+    const fromResponse =
+      asString(loginResponse?.farmid) ||
+      asString(loginResponse?.farm_id) ||
+      asString(loginResponse?.FarmId) ||
+      asString(loginResponse?.FarmID) ||
+      asString(dataObj?.farmid) ||
+      asString(dataObj?.farm_id) ||
+      asString(dataObj?.FarmId) ||
+      asString(dataObj?.FarmID) ||
+      asString(userObj?.farmid) ||
+      asString(userObj?.farm_id) ||
+      asString(userObj?.FarmId) ||
+      asString(userObj?.FarmID);
+    return fromResponse || import.meta.env.VITE_MANUAL_LOG_FARM_ID || "1";
+  }, [loginResponse]);
 
   const [mode, setMode] = useState<PlannerMode>("Auto");
   const [schedules, setSchedules] = useState<SinchaiSchedule[]>([buildDefaultSinchaiSchedule(1)]);
@@ -178,7 +229,16 @@ export default function SinchaiPlanner() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [manualDurationMin, setManualDurationMin] = useState<number | null>(null);
+  const [manualSelectedValves, setManualSelectedValves] = useState<string[]>([]);
+  const [manualRunning, setManualRunning] = useState(false);
+  const [isManualStartSubmitting, setIsManualStartSubmitting] = useState(false);
+  const [isManualStopSubmitting, setIsManualStopSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState(getPlannerSnapshot("Auto", null, [buildDefaultSinchaiSchedule(1)]));
+  const controlApiBase = useMemo(
+    () => resolveApiBase(import.meta.env.VITE_DEVICE_CONTROL_API_BASE_URL, import.meta.env.VITE_PLANNER_API_URL),
+    [],
+  );
 
   const isDirty = useMemo(
     () => getPlannerSnapshot(mode, fertigationTimeMin, schedules) !== initialSnapshot,
@@ -238,11 +298,21 @@ export default function SinchaiPlanner() {
           typeof data?.fertigation_time_min === "number" && Number.isFinite(data.fertigation_time_min)
             ? Math.max(0, data.fertigation_time_min)
             : null;
+        const manualLog = data?.manual_log;
+        const manualRunningFromApi =
+          manualLog?.timestamp && typeof manualLog.duration_min === "number"
+            ? isManualLogRunning(manualLog.timestamp, manualLog.duration_min)
+            : false;
 
         setMode(loadedMode);
         setSchedules(loadedSchedules);
         setNoOfValves(loadedNoOfValves);
         setFertigationTimeMin(loadedFertigationTime);
+        if (loadedMode === "Manual" && manualLog) {
+          setManualDurationMin(typeof manualLog.duration_min === "number" ? manualLog.duration_min : null);
+          setManualSelectedValves(Array.isArray(manualLog.valves) ? manualLog.valves : []);
+        }
+        setManualRunning(manualRunningFromApi);
         setInitialSnapshot(getPlannerSnapshot(loadedMode, loadedFertigationTime, loadedSchedules));
       } catch (error) {
         console.error("Sinchai planner load failed:", error);
@@ -252,6 +322,9 @@ export default function SinchaiPlanner() {
         setSchedules(fallback);
         setNoOfValves(sinchaiValveOptions.length);
         setFertigationTimeMin(null);
+        setManualDurationMin(null);
+        setManualSelectedValves([]);
+        setManualRunning(false);
         setInitialSnapshot(getPlannerSnapshot("Auto", null, fallback));
       } finally {
         if (mounted) setIsLoading(false);
@@ -291,7 +364,7 @@ export default function SinchaiPlanner() {
   const handleSave = async () => {
     if (!token || !userId) return;
     const normalized = normalizeScheduleNumbers(schedules);
-    const validationMessage = validatePlannerBeforeSave(fertigationTimeMin, normalized, t);
+    const validationMessage = validatePlannerBeforeSave(mode, fertigationTimeMin, normalized, t);
     if (validationMessage) {
       setValidationError(validationMessage);
       return;
@@ -335,6 +408,76 @@ export default function SinchaiPlanner() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleManualStart = async () => {
+    if (!token || !userId || !controlApiBase) {
+      setValidationError(t("dashboard.estopConfigMissingDescription"));
+      return;
+    }
+    if (manualDurationMin === null || manualDurationMin <= 0) {
+      setValidationError(t("sinchaiPlanner.validationManualDuration"));
+      return;
+    }
+    if (manualSelectedValves.length === 0) {
+      setValidationError(t("sinchaiPlanner.validationManualValves"));
+      return;
+    }
+    try {
+      setIsManualStartSubmitting(true);
+      const timestamp = new Date().toISOString();
+      await startManualIrrigation({
+        apiBase: controlApiBase,
+        token,
+        userId,
+        farmId,
+        timestamp,
+        durationMin: manualDurationMin,
+        valves: manualSelectedValves,
+      });
+      setManualRunning(true);
+      toast({
+        title: t("sinchaiPlanner.manualStartedTitle"),
+        description: t("sinchaiPlanner.manualStartedDescription"),
+      });
+    } catch (error) {
+      console.error("Manual start API failed:", error);
+      setValidationError(t("sinchaiPlanner.manualStartFailedDescription"));
+    } finally {
+      setIsManualStartSubmitting(false);
+    }
+  };
+
+  const handleManualStop = async () => {
+    if (!token || !userId || !controlApiBase) {
+      setValidationError(t("dashboard.estopConfigMissingDescription"));
+      return;
+    }
+    try {
+      setIsManualStopSubmitting(true);
+      await triggerEStop({
+        apiBase: controlApiBase,
+        token,
+        userId,
+        solutionName: "Smart_Sinchai",
+      });
+      await resetManualLog({
+        apiBase: controlApiBase,
+        token,
+        userId,
+        farmId,
+      });
+      setManualRunning(false);
+      toast({
+        title: t("sinchaiPlanner.manualStoppedTitle"),
+        description: t("sinchaiPlanner.manualStoppedDescription"),
+      });
+    } catch (error) {
+      console.error("Manual stop E-Stop API failed:", error);
+      setValidationError(t("dashboard.estopFailedDescription"));
+    } finally {
+      setIsManualStopSubmitting(false);
     }
   };
 
@@ -384,12 +527,16 @@ export default function SinchaiPlanner() {
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-semibold text-slate-900">{t("sinchaiPlanner.schedulesTitle")}</h2>
+        <h2 className="text-xl font-semibold text-slate-900">
+          {mode === "Manual" ? t("sinchaiPlanner.manualCardTitle") : t("sinchaiPlanner.schedulesTitle")}
+        </h2>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={addSchedule}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t("sinchaiPlanner.addSchedule")}
-          </Button>
+          {mode === "Auto" ? (
+            <Button type="button" variant="outline" onClick={addSchedule}>
+              <Plus className="mr-2 h-4 w-4" />
+              {t("sinchaiPlanner.addSchedule")}
+            </Button>
+          ) : null}
           <Button type="button" onClick={handleSave} disabled={isSaving || !isDirty}>
             <Save className="mr-2 h-4 w-4" />
             {isSaving ? t("sinchaiPlanner.saving") : t("sinchaiPlanner.saveAll")}
@@ -397,27 +544,29 @@ export default function SinchaiPlanner() {
         </div>
       </div>
 
-      <Card className="border-emerald-200/70 shadow-[0_14px_34px_-26px_rgba(15,120,90,0.55)]">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-emerald-900">
-            <FlaskConical className="h-5 w-5" />
-            {t("sinchaiPlanner.fertigationTitle")}
-          </CardTitle>
-          <CardDescription>{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="max-w-sm space-y-2">
-            <Label>{t("sinchaiPlanner.fertigationTimeMin")}</Label>
-            <Input
-              type="number"
-              min={0}
-              value={fertigationTimeMin ?? ""}
-              placeholder={t("sinchaiPlanner.fertigationPlaceholder")}
-              onChange={(event) => setFertigationTimeMin(parseNullableNumber(event.target.value))}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {mode === "Auto" ? (
+        <Card className="border-emerald-200/70 shadow-[0_14px_34px_-26px_rgba(15,120,90,0.55)]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-emerald-900">
+              <FlaskConical className="h-5 w-5" />
+              {t("sinchaiPlanner.fertigationTitle")}
+            </CardTitle>
+            <CardDescription>{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="max-w-sm space-y-2">
+              <Label>{t("sinchaiPlanner.fertigationTimeMin")}</Label>
+              <Input
+                type="number"
+                min={0}
+                value={fertigationTimeMin ?? ""}
+                placeholder={t("sinchaiPlanner.fertigationPlaceholder")}
+                onChange={(event) => setFertigationTimeMin(parseNullableNumber(event.target.value))}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Dialog open={Boolean(validationError)} onOpenChange={(open) => !open && setValidationError(null)}>
         <DialogContent className="max-w-md">
@@ -431,6 +580,72 @@ export default function SinchaiPlanner() {
       {isLoading ? (
         <Card>
           <CardContent className="p-5 text-sm text-muted-foreground">{t("planner.loading")}</CardContent>
+        </Card>
+      ) : mode === "Manual" ? (
+        <Card className="border-cyan-200/70 shadow-[0_14px_34px_-26px_rgba(20,95,170,0.65)]">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>{t("sinchaiPlanner.manualCardTitle")}</CardTitle>
+                <CardDescription>{t("sinchaiPlanner.manualCardDescription")}</CardDescription>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <span
+                  className={`rounded-full border px-4 py-1.5 font-extrabold shadow-sm transition-all duration-300 ${
+                    manualRunning
+                      ? "scale-105 border-emerald-300 bg-emerald-50 text-emerald-800 text-lg"
+                      : "scale-100 border-slate-300 bg-slate-50 text-slate-700 text-sm"
+                  }`}
+                >
+                  {manualRunning ? t("sinchaiPlanner.manualRunning") : t("sinchaiPlanner.manualIdle")}
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <Label>{t("sinchaiPlanner.duration")}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={manualDurationMin ?? ""}
+                  onChange={(event) => setManualDurationMin(event.target.value ? Number(event.target.value) : null)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.selectValves")}</p>
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                {valveOptions.map((valve) => {
+                  const checked = manualSelectedValves.includes(valve);
+                  return (
+                    <label key={`manual-${valve}`} className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(state) =>
+                          setManualSelectedValves((prev) => toggleListValue(prev, valve, state === true, valveOptions))
+                        }
+                      />
+                      <span>{valve}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" onClick={handleManualStart} disabled={manualRunning || isManualStartSubmitting}>
+                <Play className="mr-2 h-4 w-4" />
+                {t("sinchaiPlanner.startButton")}
+              </Button>
+              <Button type="button" variant="destructive" onClick={handleManualStop} disabled={!manualRunning || isManualStopSubmitting}>
+                <Square className="mr-2 h-4 w-4" />
+                {t("sinchaiPlanner.stopButton")}
+              </Button>
+            </div>
+          </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
