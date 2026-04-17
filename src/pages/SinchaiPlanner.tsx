@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getStoredAuthToken, getStoredLoginResponse } from "@/lib/auth";
 import { applySeo } from "@/lib/seo";
 import { fetchSinchaiPlanner, saveSinchaiPlanner, type SinchaiSchedule } from "@/lib/plannerApi";
-import { resetManualLog, startManualIrrigation, triggerEStop } from "@/lib/dashboardControlApi";
+import { resetManualLog, startManualFertigation, startManualIrrigation, triggerEStop } from "@/lib/dashboardControlApi";
 import { buildDefaultSinchaiSchedule, sinchaiDayOptions, sinchaiValveOptions } from "@/data/sinchaiPlannerDefaults";
 import { useLanguage } from "@/lib/language";
 
@@ -190,6 +190,12 @@ function isManualLogRunning(timestamp: string, durationMin: number) {
   return end.getTime() >= Date.now();
 }
 
+function getFertigationEndTime(timestamp: string, fertigationTimeMin: number) {
+  const start = new Date(timestamp);
+  if (Number.isNaN(start.getTime())) return null;
+  return start.getTime() + Math.max(0, fertigationTimeMin) * 60 * 1000;
+}
+
 function validatePlannerBeforeSave(
   mode: PlannerMode,
   fertigationTimeMin: number | null,
@@ -293,13 +299,22 @@ export default function SinchaiPlanner() {
   const [manualDurationMin, setManualDurationMin] = useState<number | null>(null);
   const [manualSelectedValves, setManualSelectedValves] = useState<string[]>([]);
   const [manualRunning, setManualRunning] = useState(false);
+  const [manualFertigationEcLower, setManualFertigationEcLower] = useState<number | null>(null);
+  const [manualFertigationEcUpper, setManualFertigationEcUpper] = useState<number | null>(null);
+  const [manualFertigationPhLower, setManualFertigationPhLower] = useState<number | null>(null);
+  const [manualFertigationPhUpper, setManualFertigationPhUpper] = useState<number | null>(null);
+  const [manualFertigationNutritionTanks, setManualFertigationNutritionTanks] = useState<Record<string, string>>({});
+  const [manualFertigationRunning, setManualFertigationRunning] = useState(false);
+  const [manualFertigationEndsAt, setManualFertigationEndsAt] = useState<number | null>(null);
+  const [manualFertigationCountdownSec, setManualFertigationCountdownSec] = useState<number>(0);
+  const [isManualFertigationStartSubmitting, setIsManualFertigationStartSubmitting] = useState(false);
   const [isManualStartSubmitting, setIsManualStartSubmitting] = useState(false);
   const [isManualStopSubmitting, setIsManualStopSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState(
     getPlannerSnapshot(
       "Auto",
-      2,
       null,
+      2,
       { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ec_increased_by: null },
       {
         ph_up_basic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_increased_by: null },
@@ -330,6 +345,30 @@ export default function SinchaiPlanner() {
     return [...generated, ...extraFromSchedules];
   }, [noOfValves, schedules]);
   const nutritionTankLabels = useMemo(() => buildNutritionTankLabels(noOfNutritionTank), [noOfNutritionTank]);
+
+  useEffect(() => {
+    if (!manualFertigationRunning || !manualFertigationEndsAt) {
+      setManualFertigationCountdownSec(0);
+      return;
+    }
+    const update = () => {
+      const remainingMs = manualFertigationEndsAt - Date.now();
+      if (remainingMs <= 0) {
+        setManualFertigationRunning(false);
+        setManualFertigationEndsAt(null);
+        setManualFertigationCountdownSec(0);
+        toast({
+          title: t("sinchaiPlanner.manualFertigationCompletedTitle"),
+          description: t("sinchaiPlanner.manualFertigationCompletedDescription"),
+        });
+        return;
+      }
+      setManualFertigationCountdownSec(Math.ceil(remainingMs / 1000));
+    };
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
+  }, [manualFertigationRunning, manualFertigationEndsAt, toast, t]);
 
   useEffect(() => {
     if (!token || !loginResponse) {
@@ -415,10 +454,17 @@ export default function SinchaiPlanner() {
           },
         };
         const manualLog = data?.manual_log;
+        const manualFertigationLog = data?.manual_fertigation_log;
         const manualRunningFromApi =
           manualLog?.timestamp && typeof manualLog.duration_min === "number"
             ? isManualLogRunning(manualLog.timestamp, manualLog.duration_min)
             : false;
+        const manualFertigationEndTime =
+          manualFertigationLog?.timestamp && typeof loadedFertigationTime === "number" && loadedFertigationTime > 0
+            ? getFertigationEndTime(manualFertigationLog.timestamp, loadedFertigationTime)
+            : null;
+        const manualFertigationRunningFromApi =
+          typeof manualFertigationEndTime === "number" ? manualFertigationEndTime >= Date.now() : false;
 
         setMode(loadedMode);
         setSchedules(loadedSchedules);
@@ -432,6 +478,34 @@ export default function SinchaiPlanner() {
           setManualSelectedValves(Array.isArray(manualLog.valves) ? manualLog.valves : []);
         }
         setManualRunning(manualRunningFromApi);
+        if (loadedMode === "Manual" && manualFertigationLog) {
+          setManualFertigationEcLower(
+            typeof manualFertigationLog.eC?.LL === "number" ? manualFertigationLog.eC.LL : null,
+          );
+          setManualFertigationEcUpper(
+            typeof manualFertigationLog.eC?.HL === "number" ? manualFertigationLog.eC.HL : null,
+          );
+          setManualFertigationPhLower(
+            typeof manualFertigationLog.pH?.LL === "number" ? manualFertigationLog.pH.LL : null,
+          );
+          setManualFertigationPhUpper(
+            typeof manualFertigationLog.pH?.HL === "number" ? manualFertigationLog.pH.HL : null,
+          );
+          setManualFertigationNutritionTanks(manualFertigationLog.nutrition_tanks ?? {});
+        } else {
+          setManualFertigationEcLower(null);
+          setManualFertigationEcUpper(null);
+          setManualFertigationPhLower(null);
+          setManualFertigationPhUpper(null);
+          setManualFertigationNutritionTanks({});
+        }
+        setManualFertigationRunning(manualFertigationRunningFromApi);
+        setManualFertigationEndsAt(manualFertigationRunningFromApi ? manualFertigationEndTime : null);
+        setManualFertigationCountdownSec(
+          manualFertigationRunningFromApi && manualFertigationEndTime
+            ? Math.max(0, Math.ceil((manualFertigationEndTime - Date.now()) / 1000))
+            : 0,
+        );
         setInitialSnapshot(
           getPlannerSnapshot(
             loadedMode,
@@ -459,11 +533,19 @@ export default function SinchaiPlanner() {
         setManualDurationMin(null);
         setManualSelectedValves([]);
         setManualRunning(false);
+        setManualFertigationEcLower(null);
+        setManualFertigationEcUpper(null);
+        setManualFertigationPhLower(null);
+        setManualFertigationPhUpper(null);
+        setManualFertigationNutritionTanks({});
+        setManualFertigationRunning(false);
+        setManualFertigationEndsAt(null);
+        setManualFertigationCountdownSec(0);
         setInitialSnapshot(
           getPlannerSnapshot(
             "Auto",
-            2,
             null,
+            2,
             { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ec_increased_by: null },
             {
               ph_up_basic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_increased_by: null },
@@ -576,6 +658,10 @@ export default function SinchaiPlanner() {
   };
 
   const handleManualStart = async () => {
+    if (manualFertigationRunning) {
+      setValidationError(t("sinchaiPlanner.manualIrrigationBlockedByFertigation"));
+      return;
+    }
     if (!token || !userId || !controlApiBase) {
       setValidationError(t("dashboard.estopConfigMissingDescription"));
       return;
@@ -645,6 +731,87 @@ export default function SinchaiPlanner() {
     }
   };
 
+  const handleManualFertigationStart = async () => {
+    if (!token || !userId || !controlApiBase) {
+      setValidationError(t("dashboard.estopConfigMissingDescription"));
+      return;
+    }
+    if (manualRunning) {
+      setValidationError(t("sinchaiPlanner.manualFertigationBlockedByIrrigation"));
+      return;
+    }
+    if (manualFertigationRunning) {
+      return;
+    }
+    if (fertigationTimeMin === null || fertigationTimeMin <= 0) {
+      setValidationError(t("sinchaiPlanner.validationFertigation"));
+      return;
+    }
+    if (
+      manualFertigationEcLower === null ||
+      manualFertigationEcUpper === null ||
+      manualFertigationPhLower === null ||
+      manualFertigationPhUpper === null
+    ) {
+      setValidationError(t("sinchaiPlanner.manualFertigationValidationLimits"));
+      return;
+    }
+    const missingTank = nutritionTankLabels.find((label) => {
+      const value = manualFertigationNutritionTanks[label];
+      return !value || !value.toString().trim();
+    });
+    if (missingTank) {
+      setValidationError(t("sinchaiPlanner.manualFertigationValidationTank", { tank: missingTank }));
+      return;
+    }
+    const nutritionTankPayload: Record<string, number> = {};
+    for (const label of nutritionTankLabels) {
+      const numericValue = parseNullableNumber(manualFertigationNutritionTanks[label] ?? "");
+      if (numericValue === null) {
+        setValidationError(t("sinchaiPlanner.manualFertigationValidationTankNumeric", { tank: label }));
+        return;
+      }
+      nutritionTankPayload[label] = numericValue;
+    }
+
+    try {
+      setIsManualFertigationStartSubmitting(true);
+      const timestamp = new Date().toISOString();
+      await startManualFertigation({
+        apiBase: controlApiBase,
+        token,
+        userId,
+        farmId,
+        timestamp,
+        ecLowerLimit: manualFertigationEcLower,
+        ecUpperLimit: manualFertigationEcUpper,
+        phLowerLimit: manualFertigationPhLower,
+        phUpperLimit: manualFertigationPhUpper,
+        nutritionTanks: nutritionTankPayload,
+      });
+      const endAt = Date.now() + fertigationTimeMin * 60 * 1000;
+      setManualFertigationEndsAt(endAt);
+      setManualFertigationRunning(true);
+      setManualFertigationCountdownSec(Math.ceil(fertigationTimeMin * 60));
+      toast({
+        title: t("sinchaiPlanner.manualFertigationStartedTitle"),
+        description: t("sinchaiPlanner.manualFertigationStartedDescription", { minutes: fertigationTimeMin }),
+      });
+    } catch (error) {
+      console.error("Manual fertigation start API failed:", error);
+      setValidationError(t("sinchaiPlanner.manualFertigationStartFailedDescription"));
+    } finally {
+      setIsManualFertigationStartSubmitting(false);
+    }
+  };
+
+  const manualFertigationCountdownLabel = useMemo(() => {
+    if (!manualFertigationRunning || manualFertigationCountdownSec <= 0) return "--:--";
+    const min = Math.floor(manualFertigationCountdownSec / 60);
+    const sec = manualFertigationCountdownSec % 60;
+    return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }, [manualFertigationRunning, manualFertigationCountdownSec]);
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <motion.div
@@ -708,16 +875,15 @@ export default function SinchaiPlanner() {
         </div>
       </div>
 
-      {mode === "Auto" ? (
-        <Card className="border-emerald-200/70 shadow-[0_14px_34px_-26px_rgba(15,120,90,0.55)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-emerald-900">
-              <FlaskConical className="h-5 w-5" />
-              {t("sinchaiPlanner.fertigationTitle")}
-            </CardTitle>
-            <CardDescription>{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
+      <Card className="border-emerald-200/70 shadow-[0_14px_34px_-26px_rgba(15,120,90,0.55)]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-emerald-900">
+            <FlaskConical className="h-5 w-5" />
+            {t("sinchaiPlanner.fertigationTitle")}
+          </CardTitle>
+          <CardDescription>{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>{t("sinchaiPlanner.fertigationTimeMin")}</Label>
@@ -910,9 +1076,8 @@ export default function SinchaiPlanner() {
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      ) : null}
+        </CardContent>
+      </Card>
 
       <Dialog open={Boolean(validationError)} onOpenChange={(open) => !open && setValidationError(null)}>
         <DialogContent className="max-w-md">
@@ -928,71 +1093,194 @@ export default function SinchaiPlanner() {
           <CardContent className="p-5 text-sm text-muted-foreground">{t("planner.loading")}</CardContent>
         </Card>
       ) : mode === "Manual" ? (
-        <Card className="border-cyan-200/70 shadow-[0_14px_34px_-26px_rgba(20,95,170,0.65)]">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle>{t("sinchaiPlanner.manualCardTitle")}</CardTitle>
-                <CardDescription>{t("sinchaiPlanner.manualCardDescription")}</CardDescription>
+        <div className="space-y-4">
+          <Card className="border-cyan-200/70 shadow-[0_14px_34px_-26px_rgba(20,95,170,0.65)]">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{t("sinchaiPlanner.manualCardTitle")}</CardTitle>
+                  <CardDescription>{t("sinchaiPlanner.manualCardDescription")}</CardDescription>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <span
+                    className={`rounded-full border px-4 py-1.5 font-extrabold shadow-sm transition-all duration-300 ${
+                      manualRunning
+                        ? "scale-105 border-emerald-300 bg-emerald-50 text-emerald-800 text-lg"
+                        : "scale-100 border-slate-300 bg-slate-50 text-slate-700 text-sm"
+                    }`}
+                  >
+                    {manualRunning ? t("sinchaiPlanner.manualRunning") : t("sinchaiPlanner.manualIdle")}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <span
-                  className={`rounded-full border px-4 py-1.5 font-extrabold shadow-sm transition-all duration-300 ${
-                    manualRunning
-                      ? "scale-105 border-emerald-300 bg-emerald-50 text-emerald-800 text-lg"
-                      : "scale-100 border-slate-300 bg-slate-50 text-slate-700 text-sm"
-                  }`}
-                >
-                  {manualRunning ? t("sinchaiPlanner.manualRunning") : t("sinchaiPlanner.manualIdle")}
-                </span>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>{t("sinchaiPlanner.duration")}</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={manualDurationMin ?? ""}
+                    onChange={(event) => setManualDurationMin(event.target.value ? Number(event.target.value) : null)}
+                  />
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+
               <div className="space-y-2">
-                <Label>{t("sinchaiPlanner.duration")}</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={manualDurationMin ?? ""}
-                  onChange={(event) => setManualDurationMin(event.target.value ? Number(event.target.value) : null)}
-                />
+                <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.selectValves")}</p>
+                <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                  {valveOptions.map((valve) => {
+                    const checked = manualSelectedValves.includes(valve);
+                    return (
+                      <label key={`manual-${valve}`} className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(state) =>
+                            setManualSelectedValves((prev) => toggleListValue(prev, valve, state === true, valveOptions))
+                          }
+                        />
+                        <span>{valve}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.selectValves")}</p>
-              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                {valveOptions.map((valve) => {
-                  const checked = manualSelectedValves.includes(valve);
-                  return (
-                    <label key={`manual-${valve}`} className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(state) =>
-                          setManualSelectedValves((prev) => toggleListValue(prev, valve, state === true, valveOptions))
-                        }
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={handleManualStart}
+                  disabled={manualRunning || isManualStartSubmitting || manualFertigationRunning}
+                >
+                  <Play className="mr-2 h-4 w-4" />
+                  {t("sinchaiPlanner.startButton")}
+                </Button>
+                <Button type="button" variant="destructive" onClick={handleManualStop} disabled={!manualRunning || isManualStopSubmitting}>
+                  <Square className="mr-2 h-4 w-4" />
+                  {t("sinchaiPlanner.stopButton")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-violet-200/70 shadow-[0_14px_34px_-26px_rgba(118,78,187,0.6)]">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{t("sinchaiPlanner.manualFertigationTitle")}</CardTitle>
+                  <CardDescription>{t("sinchaiPlanner.manualFertigationDescription")}</CardDescription>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <span
+                    className={`rounded-full border px-4 py-1.5 font-extrabold shadow-sm transition-all duration-300 ${
+                      manualFertigationRunning
+                        ? "scale-105 border-violet-300 bg-violet-50 text-violet-800 text-lg"
+                        : "scale-100 border-slate-300 bg-slate-50 text-slate-700 text-sm"
+                    }`}
+                  >
+                    {manualFertigationRunning ? t("sinchaiPlanner.manualFertigationRunning") : t("sinchaiPlanner.manualFertigationIdle")}
+                  </span>
+                  <p className="text-xs font-semibold text-violet-700">
+                    {t("sinchaiPlanner.remainingTime")}: {manualFertigationCountdownLabel}
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-3">
+                  <p className="text-sm font-semibold text-violet-800">{t("sinchaiPlanner.ecLimits")}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-violet-700">{t("sinchaiPlanner.lowerLimit")}</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={manualFertigationEcLower ?? ""}
+                        onChange={(event) => setManualFertigationEcLower(parseNullableNumber(event.target.value))}
                       />
-                      <span>{valve}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-violet-700">{t("sinchaiPlanner.upperLimit")}</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={manualFertigationEcUpper ?? ""}
+                        onChange={(event) => setManualFertigationEcUpper(parseNullableNumber(event.target.value))}
+                      />
+                    </div>
+                  </div>
+                </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" onClick={handleManualStart} disabled={manualRunning || isManualStartSubmitting}>
-                <Play className="mr-2 h-4 w-4" />
-                {t("sinchaiPlanner.startButton")}
-              </Button>
-              <Button type="button" variant="destructive" onClick={handleManualStop} disabled={!manualRunning || isManualStopSubmitting}>
-                <Square className="mr-2 h-4 w-4" />
-                {t("sinchaiPlanner.stopButton")}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50/70 p-3">
+                  <p className="text-sm font-semibold text-fuchsia-800">{t("sinchaiPlanner.phLimits")}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.lowerLimit")}</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={manualFertigationPhLower ?? ""}
+                        onChange={(event) => setManualFertigationPhLower(parseNullableNumber(event.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.upperLimit")}</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={manualFertigationPhUpper ?? ""}
+                        onChange={(event) => setManualFertigationPhUpper(parseNullableNumber(event.target.value))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.06em] text-violet-700">{t("sinchaiPlanner.nutritionTanks")}</p>
+                {nutritionTankLabels.length > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {nutritionTankLabels.map((tankLabel) => (
+                      <div key={`manual-fertigation-tank-${tankLabel}`} className="space-y-1">
+                        <Label className="text-xs text-violet-700">
+                          {t("sinchaiPlanner.nutritionTank")} {tankLabel}
+                        </Label>
+                        <Input
+                          value={manualFertigationNutritionTanks[tankLabel] ?? ""}
+                          placeholder={`${t("sinchaiPlanner.nutritionTank")} ${tankLabel}`}
+                          onChange={(event) =>
+                            setManualFertigationNutritionTanks((prev) => ({
+                              ...prev,
+                              [tankLabel]: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-violet-700/80">{t("sinchaiPlanner.noNutritionTanksHint")}</p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={handleManualFertigationStart}
+                  disabled={manualFertigationRunning || manualRunning || isManualFertigationStartSubmitting}
+                >
+                  <Play className="mr-2 h-4 w-4" />
+                  {t("sinchaiPlanner.startButton")}
+                </Button>
+                <p className="text-xs text-slate-600">
+                  {t("sinchaiPlanner.manualFertigationUsesTime", { minutes: fertigationTimeMin ?? "--" })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <div className="space-y-4">
           {schedules.map((schedule, index) => (

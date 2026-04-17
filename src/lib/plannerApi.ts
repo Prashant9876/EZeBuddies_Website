@@ -424,6 +424,18 @@ export type SinchaiPlannerDocument = {
     duration_min: number;
     valves: string[];
   } | null;
+  manual_fertigation_log?: {
+    timestamp: string;
+    eC: {
+      LL: number | null;
+      HL: number | null;
+    };
+    pH: {
+      LL: number | null;
+      HL: number | null;
+    };
+    nutrition_tanks: Record<string, string>;
+  } | null;
   schedules: SinchaiSchedule[];
 };
 
@@ -576,6 +588,26 @@ function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerD
           valves: manualValves,
         }
       : null;
+  const manualFertigationObj = readObject(obj.manual_fertigation_log ?? obj.manualFertigationLog);
+  const manualFertigationTimestamp = asString(manualFertigationObj?.timestamp);
+  const manualFertigationEcObj = readObject(manualFertigationObj?.eC ?? manualFertigationObj?.ec);
+  const manualFertigationPhObj = readObject(manualFertigationObj?.pH ?? manualFertigationObj?.ph);
+  const manualFertigationNutrition = asStringMap(manualFertigationObj?.nutrition_tanks ?? manualFertigationObj?.nutritionTanks);
+  const manualFertigationLog =
+    manualFertigationTimestamp
+      ? {
+          timestamp: manualFertigationTimestamp,
+          eC: {
+            LL: asNumberLoose(manualFertigationEcObj?.LL ?? manualFertigationEcObj?.ll ?? manualFertigationEcObj?.lower_limit),
+            HL: asNumberLoose(manualFertigationEcObj?.HL ?? manualFertigationEcObj?.hl ?? manualFertigationEcObj?.upper_limit),
+          },
+          pH: {
+            LL: asNumberLoose(manualFertigationPhObj?.LL ?? manualFertigationPhObj?.ll ?? manualFertigationPhObj?.lower_limit),
+            HL: asNumberLoose(manualFertigationPhObj?.HL ?? manualFertigationPhObj?.hl ?? manualFertigationPhObj?.upper_limit),
+          },
+          nutrition_tanks: manualFertigationNutrition,
+        }
+      : null;
 
   if (schedules.length === 0 && !Array.isArray(obj.schedules) && !Array.isArray(obj.schedule) && !Array.isArray(obj.items)) {
     return null;
@@ -590,6 +622,7 @@ function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerD
     ec_calibration_point: ecCalibrationPoint,
     ph_calibration_point: phCalibrationPoint,
     manual_log: manualLog,
+    manual_fertigation_log: manualFertigationLog,
     schedules,
   };
 }
