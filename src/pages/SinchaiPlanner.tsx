@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, Save, Trash2, FlaskConical, Play, Square } from "lucide-react";
+import { Plus, Save, Trash2, FlaskConical, Play, Square, Info } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { getStoredAuthToken, getStoredLoginResponse } from "@/lib/auth";
 import { applySeo } from "@/lib/seo";
@@ -18,6 +19,21 @@ import { buildDefaultSinchaiSchedule, sinchaiDayOptions, sinchaiValveOptions } f
 import { useLanguage } from "@/lib/language";
 
 type PlannerMode = "Auto" | "Manual";
+type EcCalibrationPoint = {
+  concentration_solution_liquid_quantity_ml: number | null;
+  ro_water_liter: number | null;
+  ec_increased_by: number | null;
+};
+type PhCalibrationLeg = {
+  concentration_solution_liquid_quantity_ml: number | null;
+  ro_water_liter: number | null;
+  ph_increased_by?: number | null;
+  ph_decreased_by?: number | null;
+};
+type PhCalibrationPoint = {
+  ph_up_basic_solution: PhCalibrationLeg;
+  ph_down_acidic_solution: PhCalibrationLeg;
+};
 
 function readObject(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -52,6 +68,7 @@ function normalizeScheduleNumbers(schedules: SinchaiSchedule[]) {
     ...schedule,
     schedule_no: index + 1,
     schedule_name: schedule.schedule_name?.trim() ? schedule.schedule_name : `Schedule ${index + 1}`,
+    nutrition_tanks: schedule.nutrition_tanks ?? {},
     ec_lower_limit: typeof schedule.ec_lower_limit === "number" ? schedule.ec_lower_limit : null,
     ec_upper_limit: typeof schedule.ec_upper_limit === "number" ? schedule.ec_upper_limit : null,
     ph_lower_limit: typeof schedule.ph_lower_limit === "number" ? schedule.ph_lower_limit : null,
@@ -125,10 +142,20 @@ function findOverlappingSchedules(schedules: SinchaiSchedule[], fertigationTimeM
   return null;
 }
 
-function getPlannerSnapshot(mode: PlannerMode, fertigationTimeMin: number | null, schedules: SinchaiSchedule[]) {
+function getPlannerSnapshot(
+  mode: PlannerMode,
+  fertigationTimeMin: number | null,
+  noOfNutritionTank: number | null,
+  ecCalibrationPoint: EcCalibrationPoint,
+  phCalibrationPoint: PhCalibrationPoint,
+  schedules: SinchaiSchedule[],
+) {
   return JSON.stringify({
     mode,
     fertigation_time_min: fertigationTimeMin,
+    no_of_nutrition_tank: noOfNutritionTank,
+    ec_calibration_point: ecCalibrationPoint,
+    ph_calibration_point: phCalibrationPoint,
     schedules: normalizeScheduleNumbers(schedules),
   });
 }
@@ -138,6 +165,22 @@ function parseNullableNumber(value: string) {
   if (!text) return null;
   const numeric = Number(text);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function toAlphabetIndex(index: number) {
+  let n = index + 1;
+  let label = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    label = String.fromCharCode(65 + rem) + label;
+    n = Math.floor((n - 1) / 26);
+  }
+  return label;
+}
+
+function buildNutritionTankLabels(count: number | null) {
+  const total = count && Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+  return Array.from({ length: total }, (_, index) => `${toAlphabetIndex(index)}`);
 }
 
 function isManualLogRunning(timestamp: string, durationMin: number) {
@@ -226,6 +269,24 @@ export default function SinchaiPlanner() {
   const [schedules, setSchedules] = useState<SinchaiSchedule[]>([buildDefaultSinchaiSchedule(1)]);
   const [noOfValves, setNoOfValves] = useState<number>(sinchaiValveOptions.length);
   const [fertigationTimeMin, setFertigationTimeMin] = useState<number | null>(null);
+  const [noOfNutritionTank, setNoOfNutritionTank] = useState<number | null>(2);
+  const [ecCalibrationPoint, setEcCalibrationPoint] = useState<EcCalibrationPoint>({
+    concentration_solution_liquid_quantity_ml: null,
+    ro_water_liter: null,
+    ec_increased_by: null,
+  });
+  const [phCalibrationPoint, setPhCalibrationPoint] = useState<PhCalibrationPoint>({
+    ph_up_basic_solution: {
+      concentration_solution_liquid_quantity_ml: null,
+      ro_water_liter: null,
+      ph_increased_by: null,
+    },
+    ph_down_acidic_solution: {
+      concentration_solution_liquid_quantity_ml: null,
+      ro_water_liter: null,
+      ph_decreased_by: null,
+    },
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -234,15 +295,27 @@ export default function SinchaiPlanner() {
   const [manualRunning, setManualRunning] = useState(false);
   const [isManualStartSubmitting, setIsManualStartSubmitting] = useState(false);
   const [isManualStopSubmitting, setIsManualStopSubmitting] = useState(false);
-  const [initialSnapshot, setInitialSnapshot] = useState(getPlannerSnapshot("Auto", null, [buildDefaultSinchaiSchedule(1)]));
+  const [initialSnapshot, setInitialSnapshot] = useState(
+    getPlannerSnapshot(
+      "Auto",
+      2,
+      null,
+      { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ec_increased_by: null },
+      {
+        ph_up_basic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_increased_by: null },
+        ph_down_acidic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_decreased_by: null },
+      },
+      [buildDefaultSinchaiSchedule(1)],
+    ),
+  );
   const controlApiBase = useMemo(
     () => resolveApiBase(import.meta.env.VITE_DEVICE_CONTROL_API_BASE_URL, import.meta.env.VITE_PLANNER_API_URL),
     [],
   );
 
   const isDirty = useMemo(
-    () => getPlannerSnapshot(mode, fertigationTimeMin, schedules) !== initialSnapshot,
-    [mode, fertigationTimeMin, schedules, initialSnapshot],
+    () => getPlannerSnapshot(mode, fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint, schedules) !== initialSnapshot,
+    [mode, fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint, schedules, initialSnapshot],
   );
   const valveOptions = useMemo(() => {
     const baseCount = Math.max(1, Math.trunc(noOfValves));
@@ -256,6 +329,7 @@ export default function SinchaiPlanner() {
     );
     return [...generated, ...extraFromSchedules];
   }, [noOfValves, schedules]);
+  const nutritionTankLabels = useMemo(() => buildNutritionTankLabels(noOfNutritionTank), [noOfNutritionTank]);
 
   useEffect(() => {
     if (!token || !loginResponse) {
@@ -298,6 +372,48 @@ export default function SinchaiPlanner() {
           typeof data?.fertigation_time_min === "number" && Number.isFinite(data.fertigation_time_min)
             ? Math.max(0, data.fertigation_time_min)
             : null;
+        const loadedNoOfNutritionTank =
+          typeof data?.no_of_nutrition_tank === "number" && Number.isFinite(data.no_of_nutrition_tank)
+            ? Math.max(0, Math.trunc(data.no_of_nutrition_tank))
+            : 2;
+        const loadedEcCalibrationPoint: EcCalibrationPoint = {
+          concentration_solution_liquid_quantity_ml:
+            typeof data?.ec_calibration_point?.concentration_solution_liquid_quantity_ml === "number"
+              ? data.ec_calibration_point.concentration_solution_liquid_quantity_ml
+              : null,
+          ro_water_liter: typeof data?.ec_calibration_point?.ro_water_liter === "number" ? data.ec_calibration_point.ro_water_liter : null,
+          ec_increased_by: typeof data?.ec_calibration_point?.ec_increased_by === "number" ? data.ec_calibration_point.ec_increased_by : null,
+        };
+        const loadedPhCalibrationPoint: PhCalibrationPoint = {
+          ph_up_basic_solution: {
+            concentration_solution_liquid_quantity_ml:
+              typeof data?.ph_calibration_point?.ph_up_basic_solution?.concentration_solution_liquid_quantity_ml === "number"
+                ? data.ph_calibration_point.ph_up_basic_solution.concentration_solution_liquid_quantity_ml
+                : null,
+            ro_water_liter:
+              typeof data?.ph_calibration_point?.ph_up_basic_solution?.ro_water_liter === "number"
+                ? data.ph_calibration_point.ph_up_basic_solution.ro_water_liter
+                : null,
+            ph_increased_by:
+              typeof data?.ph_calibration_point?.ph_up_basic_solution?.ph_increased_by === "number"
+                ? data.ph_calibration_point.ph_up_basic_solution.ph_increased_by
+                : null,
+          },
+          ph_down_acidic_solution: {
+            concentration_solution_liquid_quantity_ml:
+              typeof data?.ph_calibration_point?.ph_down_acidic_solution?.concentration_solution_liquid_quantity_ml === "number"
+                ? data.ph_calibration_point.ph_down_acidic_solution.concentration_solution_liquid_quantity_ml
+                : null,
+            ro_water_liter:
+              typeof data?.ph_calibration_point?.ph_down_acidic_solution?.ro_water_liter === "number"
+                ? data.ph_calibration_point.ph_down_acidic_solution.ro_water_liter
+                : null,
+            ph_decreased_by:
+              typeof data?.ph_calibration_point?.ph_down_acidic_solution?.ph_decreased_by === "number"
+                ? data.ph_calibration_point.ph_down_acidic_solution.ph_decreased_by
+                : null,
+          },
+        };
         const manualLog = data?.manual_log;
         const manualRunningFromApi =
           manualLog?.timestamp && typeof manualLog.duration_min === "number"
@@ -308,12 +424,24 @@ export default function SinchaiPlanner() {
         setSchedules(loadedSchedules);
         setNoOfValves(loadedNoOfValves);
         setFertigationTimeMin(loadedFertigationTime);
+        setNoOfNutritionTank(loadedNoOfNutritionTank);
+        setEcCalibrationPoint(loadedEcCalibrationPoint);
+        setPhCalibrationPoint(loadedPhCalibrationPoint);
         if (loadedMode === "Manual" && manualLog) {
           setManualDurationMin(typeof manualLog.duration_min === "number" ? manualLog.duration_min : null);
           setManualSelectedValves(Array.isArray(manualLog.valves) ? manualLog.valves : []);
         }
         setManualRunning(manualRunningFromApi);
-        setInitialSnapshot(getPlannerSnapshot(loadedMode, loadedFertigationTime, loadedSchedules));
+        setInitialSnapshot(
+          getPlannerSnapshot(
+            loadedMode,
+            loadedFertigationTime,
+            loadedNoOfNutritionTank,
+            loadedEcCalibrationPoint,
+            loadedPhCalibrationPoint,
+            loadedSchedules,
+          ),
+        );
       } catch (error) {
         console.error("Sinchai planner load failed:", error);
         if (!mounted) return;
@@ -322,10 +450,28 @@ export default function SinchaiPlanner() {
         setSchedules(fallback);
         setNoOfValves(sinchaiValveOptions.length);
         setFertigationTimeMin(null);
+        setNoOfNutritionTank(2);
+        setEcCalibrationPoint({ concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ec_increased_by: null });
+        setPhCalibrationPoint({
+          ph_up_basic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_increased_by: null },
+          ph_down_acidic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_decreased_by: null },
+        });
         setManualDurationMin(null);
         setManualSelectedValves([]);
         setManualRunning(false);
-        setInitialSnapshot(getPlannerSnapshot("Auto", null, fallback));
+        setInitialSnapshot(
+          getPlannerSnapshot(
+            "Auto",
+            2,
+            null,
+            { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ec_increased_by: null },
+            {
+              ph_up_basic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_increased_by: null },
+              ph_down_acidic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_decreased_by: null },
+            },
+            fallback,
+          ),
+        );
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -391,10 +537,28 @@ export default function SinchaiPlanner() {
         mode,
         noOfValves,
         fertigationTimeMin,
+        noOfNutritionTank,
+        ecCalibrationPoint: {
+          concentration_solution_liquid_quantity_ml: ecCalibrationPoint.concentration_solution_liquid_quantity_ml,
+          ro_water_liter: ecCalibrationPoint.ro_water_liter,
+          ec_increased_by: ecCalibrationPoint.ec_increased_by,
+        },
+        phCalibrationPoint: {
+          ph_up_basic_solution: {
+            concentration_solution_liquid_quantity_ml: phCalibrationPoint.ph_up_basic_solution.concentration_solution_liquid_quantity_ml,
+            ro_water_liter: phCalibrationPoint.ph_up_basic_solution.ro_water_liter,
+            ph_increased_by: phCalibrationPoint.ph_up_basic_solution.ph_increased_by ?? null,
+          },
+          ph_down_acidic_solution: {
+            concentration_solution_liquid_quantity_ml: phCalibrationPoint.ph_down_acidic_solution.concentration_solution_liquid_quantity_ml,
+            ro_water_liter: phCalibrationPoint.ph_down_acidic_solution.ro_water_liter,
+            ph_decreased_by: phCalibrationPoint.ph_down_acidic_solution.ph_decreased_by ?? null,
+          },
+        },
         schedules: normalized,
       });
       setSchedules(normalized);
-      setInitialSnapshot(getPlannerSnapshot(mode, fertigationTimeMin, normalized));
+      setInitialSnapshot(getPlannerSnapshot(mode, fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint, normalized));
       toast({
         title: t("sinchaiPlanner.savedTitle"),
         description: t("sinchaiPlanner.savedDescription"),
@@ -553,16 +717,198 @@ export default function SinchaiPlanner() {
             </CardTitle>
             <CardDescription>{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="max-w-sm space-y-2">
-              <Label>{t("sinchaiPlanner.fertigationTimeMin")}</Label>
-              <Input
-                type="number"
-                min={0}
-                value={fertigationTimeMin ?? ""}
-                placeholder={t("sinchaiPlanner.fertigationPlaceholder")}
-                onChange={(event) => setFertigationTimeMin(parseNullableNumber(event.target.value))}
-              />
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{t("sinchaiPlanner.fertigationTimeMin")}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={fertigationTimeMin ?? ""}
+                  placeholder={t("sinchaiPlanner.fertigationPlaceholder")}
+                  onChange={(event) => setFertigationTimeMin(parseNullableNumber(event.target.value))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t("sinchaiPlanner.noOfNutritionTank")}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={noOfNutritionTank ?? ""}
+                  placeholder={t("sinchaiPlanner.noOfNutritionTankPlaceholder")}
+                  onChange={(event) => setNoOfNutritionTank(parseNullableNumber(event.target.value))}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-violet-200/70 bg-violet-50/50 p-4">
+              <p className="mb-3 text-sm font-bold text-violet-900">{t("sinchaiPlanner.ecCalibrationTitle")}</p>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-violet-800">{t("sinchaiPlanner.concentrationSolutionQtyMl")}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={ecCalibrationPoint.concentration_solution_liquid_quantity_ml ?? ""}
+                    onChange={(event) =>
+                      setEcCalibrationPoint((prev) => ({
+                        ...prev,
+                        concentration_solution_liquid_quantity_ml: parseNullableNumber(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-violet-800">{t("sinchaiPlanner.roWaterLiter")}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={ecCalibrationPoint.ro_water_liter ?? ""}
+                    onChange={(event) =>
+                      setEcCalibrationPoint((prev) => ({
+                        ...prev,
+                        ro_water_liter: parseNullableNumber(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-violet-800">{t("sinchaiPlanner.ecIncreasedBy")}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={ecCalibrationPoint.ec_increased_by ?? ""}
+                    onChange={(event) =>
+                      setEcCalibrationPoint((prev) => ({
+                        ...prev,
+                        ec_increased_by: parseNullableNumber(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-sky-200/70 bg-sky-50/50 p-4">
+              <p className="mb-3 text-sm font-bold text-sky-900">{t("sinchaiPlanner.phCalibrationTitle")}</p>
+              <div className="space-y-4">
+                <div className="rounded-lg border border-sky-200/70 bg-white/80 p-3">
+                  <p className="mb-2 text-xs font-bold text-sky-800">{t("sinchaiPlanner.phUpBasicSolution")}</p>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-sky-800">{t("sinchaiPlanner.concentrationSolutionQtyMl")}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={phCalibrationPoint.ph_up_basic_solution.concentration_solution_liquid_quantity_ml ?? ""}
+                        onChange={(event) =>
+                          setPhCalibrationPoint((prev) => ({
+                            ...prev,
+                            ph_up_basic_solution: {
+                              ...prev.ph_up_basic_solution,
+                              concentration_solution_liquid_quantity_ml: parseNullableNumber(event.target.value),
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-sky-800">{t("sinchaiPlanner.roWaterLiter")}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={phCalibrationPoint.ph_up_basic_solution.ro_water_liter ?? ""}
+                        onChange={(event) =>
+                          setPhCalibrationPoint((prev) => ({
+                            ...prev,
+                            ph_up_basic_solution: {
+                              ...prev.ph_up_basic_solution,
+                              ro_water_liter: parseNullableNumber(event.target.value),
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-sky-800">{t("sinchaiPlanner.phIncreasedBy")}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        value={phCalibrationPoint.ph_up_basic_solution.ph_increased_by ?? ""}
+                        onChange={(event) =>
+                          setPhCalibrationPoint((prev) => ({
+                            ...prev,
+                            ph_up_basic_solution: {
+                              ...prev.ph_up_basic_solution,
+                              ph_increased_by: parseNullableNumber(event.target.value),
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-sky-200/70 bg-white/80 p-3">
+                  <p className="mb-2 text-xs font-bold text-sky-800">{t("sinchaiPlanner.phDownAcidicSolution")}</p>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-sky-800">{t("sinchaiPlanner.concentrationSolutionQtyMl")}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={phCalibrationPoint.ph_down_acidic_solution.concentration_solution_liquid_quantity_ml ?? ""}
+                        onChange={(event) =>
+                          setPhCalibrationPoint((prev) => ({
+                            ...prev,
+                            ph_down_acidic_solution: {
+                              ...prev.ph_down_acidic_solution,
+                              concentration_solution_liquid_quantity_ml: parseNullableNumber(event.target.value),
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-sky-800">{t("sinchaiPlanner.roWaterLiter")}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={phCalibrationPoint.ph_down_acidic_solution.ro_water_liter ?? ""}
+                        onChange={(event) =>
+                          setPhCalibrationPoint((prev) => ({
+                            ...prev,
+                            ph_down_acidic_solution: {
+                              ...prev.ph_down_acidic_solution,
+                              ro_water_liter: parseNullableNumber(event.target.value),
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-sky-800">{t("sinchaiPlanner.phDecreasedBy")}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        value={phCalibrationPoint.ph_down_acidic_solution.ph_decreased_by ?? ""}
+                        onChange={(event) =>
+                          setPhCalibrationPoint((prev) => ({
+                            ...prev,
+                            ph_down_acidic_solution: {
+                              ...prev.ph_down_acidic_solution,
+                              ph_decreased_by: parseNullableNumber(event.target.value),
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -761,6 +1107,54 @@ export default function SinchaiPlanner() {
                             }
                           />
                         </div>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-violet-700">
+                            {t("sinchaiPlanner.nutritionTanks")}
+                          </p>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-violet-300 bg-white text-violet-700 transition hover:bg-violet-100"
+                                aria-label={t("sinchaiPlanner.nutritionTanksInfoLabel")}
+                              >
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent align="start" className="w-72 border-violet-200 bg-white/95 text-sm text-slate-700">
+                              {t("sinchaiPlanner.nutritionTanksInfo")}
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        {nutritionTankLabels.length > 0 ? (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {nutritionTankLabels.map((tankLabel) => (
+                              <div key={`${schedule.schedule_no}-nutrition-tank-${tankLabel}`} className="space-y-1">
+                                <Label className="text-xs text-violet-700">
+                                  {t("sinchaiPlanner.nutritionTank")} {tankLabel}
+                                </Label>
+                                <Input
+                                  value={schedule.nutrition_tanks?.[tankLabel] ?? ""}
+                                  placeholder={`${t("sinchaiPlanner.nutritionTank")} ${tankLabel}`}
+                                  className="bg-white/80 text-violet-800 placeholder:text-violet-400"
+                                  onChange={(event) =>
+                                    updateSchedule(schedule.schedule_no, (prev) => ({
+                                      ...prev,
+                                      nutrition_tanks: {
+                                        ...(prev.nutrition_tanks ?? {}),
+                                        [tankLabel]: event.target.value,
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-violet-700/80">{t("sinchaiPlanner.noNutritionTanksHint")}</p>
+                        )}
                       </div>
                     </div>
                     <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50/70 p-3">

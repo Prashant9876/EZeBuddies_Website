@@ -389,6 +389,7 @@ export type SinchaiSchedule = {
   valves: string[];
   days: string[];
   enabled: boolean;
+  nutrition_tanks?: Record<string, string>;
   ec_lower_limit?: number | null;
   ec_upper_limit?: number | null;
   ph_lower_limit?: number | null;
@@ -400,6 +401,24 @@ export type SinchaiPlannerDocument = {
   mode: string;
   no_of_valves: number;
   fertigation_time_min: number | null;
+  no_of_nutrition_tank?: number | null;
+  ec_calibration_point?: {
+    concentration_solution_liquid_quantity_ml: number | null;
+    ro_water_liter: number | null;
+    ec_increased_by: number | null;
+  };
+  ph_calibration_point?: {
+    ph_up_basic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_increased_by: number | null;
+    };
+    ph_down_acidic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_decreased_by: number | null;
+    };
+  };
   manual_log?: {
     timestamp: string;
     duration_min: number;
@@ -433,6 +452,23 @@ function asStringArray(value: unknown) {
   return value.map((item) => asString(item)).filter((item): item is string => Boolean(item?.trim())).map((item) => item.trim());
 }
 
+function asStringMap(value: unknown) {
+  const obj = readObject(value);
+  if (!obj) return {};
+  return Object.entries(obj).reduce<Record<string, string>>((acc, [key, raw]) => {
+    const text =
+      typeof raw === "number" && Number.isFinite(raw)
+        ? String(raw)
+        : typeof raw === "string"
+          ? raw
+          : undefined;
+    if (text !== undefined && text.trim()) {
+      acc[key.trim()] = text.trim();
+    }
+    return acc;
+  }, {});
+}
+
 function normalizeSinchaiSchedules(source: unknown) {
   if (!Array.isArray(source)) return [];
   return source
@@ -451,6 +487,7 @@ function normalizeSinchaiSchedules(source: unknown) {
         valves: asStringArray(row.valves ?? row.zones ?? row.lines),
         days: asStringArray(row.days ?? row.repeat_days ?? row.weekdays),
         enabled,
+        nutrition_tanks: asStringMap(row.nutrition_tanks ?? row.nutritionTanks),
         ec_lower_limit: asNumberLoose(row.ec_lower_limit ?? row.ecLowerLimit ?? row.ec_min ?? row.ecMin),
         ec_upper_limit: asNumberLoose(row.ec_upper_limit ?? row.ecUpperLimit ?? row.ec_max ?? row.ecMax),
         ph_lower_limit: asNumberLoose(row.ph_lower_limit ?? row.phLowerLimit ?? row.ph_min ?? row.phMin),
@@ -491,6 +528,42 @@ function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerD
   const payloadUserId = asString(obj.user_id) ?? asString(obj.userId) ?? userId;
   const noOfValves = asNumberLoose(obj.No_of_valves ?? obj.no_of_valves ?? obj.valves_count) ?? 6;
   const fertigationTime = asNumberLoose(obj.fertigation_time_min ?? obj.fertigationTimeMin ?? obj.fertigation_time);
+  const noOfNutritionTank = asNumberLoose(
+    obj.no_of_nutrition_tank ?? obj.noOfNutritionTank ?? obj.No_of_nutrition_tank ?? obj.nutrition_tank_count,
+  );
+  const ecPointObj = readObject(obj.ec_calibration_point ?? obj.ecCalibrationPoint);
+  const phPointObj = readObject(obj.ph_calibration_point ?? obj.phCalibrationPoint);
+  const phUpObj = readObject(phPointObj?.ph_up_basic_solution ?? phPointObj?.phUpBasicSolution ?? phPointObj?.ph_up);
+  const phDownObj = readObject(phPointObj?.ph_down_acidic_solution ?? phPointObj?.phDownAcidicSolution ?? phPointObj?.ph_down);
+  const ecCalibrationPoint = {
+    concentration_solution_liquid_quantity_ml: asNumberLoose(
+      ecPointObj?.concentration_solution_liquid_quantity_ml ??
+        ecPointObj?.concentrationSolutionLiquidQuantityMl ??
+        ecPointObj?.concentration_ml,
+    ),
+    ro_water_liter: asNumberLoose(ecPointObj?.ro_water_liter ?? ecPointObj?.roWaterLiter ?? ecPointObj?.ro_liter),
+    ec_increased_by: asNumberLoose(ecPointObj?.ec_increased_by ?? ecPointObj?.ecIncreasedBy ?? ecPointObj?.ec_delta),
+  };
+  const phCalibrationPoint = {
+    ph_up_basic_solution: {
+      concentration_solution_liquid_quantity_ml: asNumberLoose(
+        phUpObj?.concentration_solution_liquid_quantity_ml ??
+          phUpObj?.concentrationSolutionLiquidQuantityMl ??
+          phUpObj?.concentration_ml,
+      ),
+      ro_water_liter: asNumberLoose(phUpObj?.ro_water_liter ?? phUpObj?.roWaterLiter ?? phUpObj?.ro_liter),
+      ph_increased_by: asNumberLoose(phUpObj?.ph_increased_by ?? phUpObj?.phIncreasedBy ?? phUpObj?.ph_delta),
+    },
+    ph_down_acidic_solution: {
+      concentration_solution_liquid_quantity_ml: asNumberLoose(
+        phDownObj?.concentration_solution_liquid_quantity_ml ??
+          phDownObj?.concentrationSolutionLiquidQuantityMl ??
+          phDownObj?.concentration_ml,
+      ),
+      ro_water_liter: asNumberLoose(phDownObj?.ro_water_liter ?? phDownObj?.roWaterLiter ?? phDownObj?.ro_liter),
+      ph_decreased_by: asNumberLoose(phDownObj?.ph_decreased_by ?? phDownObj?.phDecreasedBy ?? phDownObj?.ph_delta),
+    },
+  };
   const manualLogObj = readObject(obj.manual_log ?? obj.manualLog);
   const manualTimestamp = asString(manualLogObj?.timestamp);
   const manualDuration = asNumberLoose(manualLogObj?.duration_min ?? manualLogObj?.durationMin);
@@ -513,6 +586,9 @@ function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerD
     mode,
     no_of_valves: Math.max(1, Math.trunc(noOfValves)),
     fertigation_time_min: fertigationTime !== null ? Math.max(0, fertigationTime) : null,
+    no_of_nutrition_tank: noOfNutritionTank !== null ? Math.max(0, Math.trunc(noOfNutritionTank)) : 2,
+    ec_calibration_point: ecCalibrationPoint,
+    ph_calibration_point: phCalibrationPoint,
     manual_log: manualLog,
     schedules,
   };
@@ -580,6 +656,24 @@ export async function saveSinchaiPlanner(args: {
   mode: string;
   noOfValves: number;
   fertigationTimeMin: number | null;
+  noOfNutritionTank: number | null;
+  ecCalibrationPoint: {
+    concentration_solution_liquid_quantity_ml: number | null;
+    ro_water_liter: number | null;
+    ec_increased_by: number | null;
+  };
+  phCalibrationPoint: {
+    ph_up_basic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_increased_by: number | null;
+    };
+    ph_down_acidic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_decreased_by: number | null;
+    };
+  };
   schedules: SinchaiSchedule[];
 }) {
   const endpoint = resolveSinchaiPlannerSaveEndpoint();
@@ -592,6 +686,9 @@ export async function saveSinchaiPlanner(args: {
     mode: args.mode,
     No_of_valves: Math.max(1, Math.trunc(args.noOfValves)),
     fertigation_time_min: args.fertigationTimeMin,
+    no_of_nutrition_tank: args.noOfNutritionTank,
+    ec_calibration_point: args.ecCalibrationPoint,
+    ph_calibration_point: args.phCalibrationPoint,
     schedules: args.schedules,
   };
 
