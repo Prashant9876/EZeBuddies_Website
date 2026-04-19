@@ -196,6 +196,29 @@ function getFertigationEndTime(timestamp: string, fertigationTimeMin: number) {
   return start.getTime() + Math.max(0, fertigationTimeMin) * 60 * 1000;
 }
 
+function getTodayShortName() {
+  const shortDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+  return shortDays[new Date().getDay()];
+}
+
+function isAutoScheduleRunningNow(schedules: SinchaiSchedule[], fertigationTimeMin: number | null) {
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const today = getTodayShortName();
+  const fertigationLead = Math.max(0, Math.trunc(fertigationTimeMin ?? 0));
+
+  return schedules.some((schedule) => {
+    if (!schedule.enabled) return false;
+    if (!schedule.days.includes(today)) return false;
+    const startMin = parseTimeToMinutes(schedule.start_time);
+    const duration = schedule.irrigation_duration_min;
+    if (startMin === null || !duration || duration <= 0) return false;
+    const activityStart = Math.max(0, startMin - fertigationLead);
+    const activityEnd = startMin + duration;
+    return nowMinutes >= activityStart && nowMinutes <= activityEnd;
+  });
+}
+
 function validatePlannerBeforeSave(
   mode: PlannerMode,
   fertigationTimeMin: number | null,
@@ -310,6 +333,10 @@ export default function SinchaiPlanner() {
   const [isManualFertigationStartSubmitting, setIsManualFertigationStartSubmitting] = useState(false);
   const [isManualStartSubmitting, setIsManualStartSubmitting] = useState(false);
   const [isManualStopSubmitting, setIsManualStopSubmitting] = useState(false);
+  const [savedMode, setSavedMode] = useState<PlannerMode>("Auto");
+  const [pendingModeAfterEStop, setPendingModeAfterEStop] = useState<PlannerMode | null>(null);
+  const [isModeSwitchEStopDialogOpen, setIsModeSwitchEStopDialogOpen] = useState(false);
+  const [isModeSwitchEStopSubmitting, setIsModeSwitchEStopSubmitting] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState(
     getPlannerSnapshot(
       "Auto",
@@ -345,6 +372,11 @@ export default function SinchaiPlanner() {
     return [...generated, ...extraFromSchedules];
   }, [noOfValves, schedules]);
   const nutritionTankLabels = useMemo(() => buildNutritionTankLabels(noOfNutritionTank), [noOfNutritionTank]);
+  const autoModeActivityRunning = useMemo(
+    () => mode === "Auto" && isAutoScheduleRunningNow(schedules, fertigationTimeMin),
+    [mode, schedules, fertigationTimeMin],
+  );
+  const manualControlsLocked = mode === "Manual" && savedMode !== "Manual";
 
   useEffect(() => {
     if (!manualFertigationRunning || !manualFertigationEndsAt) {
@@ -467,6 +499,7 @@ export default function SinchaiPlanner() {
           typeof manualFertigationEndTime === "number" ? manualFertigationEndTime >= Date.now() : false;
 
         setMode(loadedMode);
+        setSavedMode(loadedMode);
         setSchedules(loadedSchedules);
         setNoOfValves(loadedNoOfValves);
         setFertigationTimeMin(loadedFertigationTime);
@@ -521,6 +554,7 @@ export default function SinchaiPlanner() {
         if (!mounted) return;
         const fallback = [buildDefaultSinchaiSchedule(1)];
         setMode("Auto");
+        setSavedMode("Auto");
         setSchedules(fallback);
         setNoOfValves(sinchaiValveOptions.length);
         setFertigationTimeMin(null);
@@ -640,6 +674,7 @@ export default function SinchaiPlanner() {
         schedules: normalized,
       });
       setSchedules(normalized);
+      setSavedMode(mode);
       setInitialSnapshot(getPlannerSnapshot(mode, fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint, normalized));
       toast({
         title: t("sinchaiPlanner.savedTitle"),
@@ -658,6 +693,10 @@ export default function SinchaiPlanner() {
   };
 
   const handleManualStart = async () => {
+    if (manualControlsLocked) {
+      setValidationError(t("sinchaiPlanner.manualSaveRequiredBeforeRun"));
+      return;
+    }
     if (manualFertigationRunning) {
       setValidationError(t("sinchaiPlanner.manualIrrigationBlockedByFertigation"));
       return;
@@ -700,6 +739,10 @@ export default function SinchaiPlanner() {
   };
 
   const handleManualStop = async () => {
+    if (manualControlsLocked) {
+      setValidationError(t("sinchaiPlanner.manualSaveRequiredBeforeRun"));
+      return;
+    }
     if (!token || !userId || !controlApiBase) {
       setValidationError(t("dashboard.estopConfigMissingDescription"));
       return;
@@ -732,6 +775,10 @@ export default function SinchaiPlanner() {
   };
 
   const handleManualFertigationStart = async () => {
+    if (manualControlsLocked) {
+      setValidationError(t("sinchaiPlanner.manualSaveRequiredBeforeRun"));
+      return;
+    }
     if (!token || !userId || !controlApiBase) {
       setValidationError(t("dashboard.estopConfigMissingDescription"));
       return;
@@ -812,6 +859,47 @@ export default function SinchaiPlanner() {
     return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   }, [manualFertigationRunning, manualFertigationCountdownSec]);
 
+  const handleModeChange = (nextMode: PlannerMode) => {
+    if (nextMode === mode) return;
+    if (mode === "Auto" && nextMode === "Manual" && autoModeActivityRunning) {
+      setPendingModeAfterEStop(nextMode);
+      setIsModeSwitchEStopDialogOpen(true);
+      return;
+    }
+    setMode(nextMode);
+  };
+
+  const handleModeSwitchEStop = async () => {
+    if (!token || !userId || !controlApiBase) {
+      setValidationError(t("dashboard.estopConfigMissingDescription"));
+      return;
+    }
+    try {
+      setIsModeSwitchEStopSubmitting(true);
+      await triggerEStop({
+        apiBase: controlApiBase,
+        token,
+        userId,
+        solutionName: "Smart_Sinchai",
+      });
+      setIsModeSwitchEStopDialogOpen(false);
+      if (pendingModeAfterEStop) {
+        setMode(pendingModeAfterEStop);
+      }
+      setPendingModeAfterEStop(null);
+      toast({
+        title: t("dashboard.estopEnabledTitle"),
+        description: t("dashboard.estopEnabledDescription", { solution: "Smart_Sinchai" }),
+        variant: "destructive",
+      });
+    } catch (error) {
+      console.error("Mode switch E-Stop API failed:", error);
+      setValidationError(t("dashboard.estopFailedDescription"));
+    } finally {
+      setIsModeSwitchEStopSubmitting(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <motion.div
@@ -847,7 +935,7 @@ export default function SinchaiPlanner() {
             <Label>{t("sinchaiPlanner.modeLabel")}</Label>
             <select
               value={mode}
-              onChange={(event) => setMode(normalizeMode(event.target.value))}
+              onChange={(event) => handleModeChange(normalizeMode(event.target.value))}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="Auto">{t("dashboard.auto")}</option>
@@ -875,18 +963,18 @@ export default function SinchaiPlanner() {
         </div>
       </div>
 
-      <Card className="border-emerald-200/70 shadow-[0_14px_34px_-26px_rgba(15,120,90,0.55)]">
+      <Card className="border-slate-700/70 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900/80 text-slate-100 shadow-[0_18px_42px_-24px_rgba(4,12,28,0.8)]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-emerald-900">
+          <CardTitle className="flex items-center gap-2 text-emerald-200">
             <FlaskConical className="h-5 w-5" />
             {t("sinchaiPlanner.fertigationTitle")}
           </CardTitle>
-          <CardDescription>{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
+          <CardDescription className="text-slate-300">{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-5 [&_input]:bg-white/95 [&_input]:text-slate-900 [&_input]:placeholder:text-slate-500">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>{t("sinchaiPlanner.fertigationTimeMin")}</Label>
+                <Label className="text-slate-200">{t("sinchaiPlanner.fertigationTimeMin")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -896,7 +984,7 @@ export default function SinchaiPlanner() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>{t("sinchaiPlanner.noOfNutritionTank")}</Label>
+                <Label className="text-slate-200">{t("sinchaiPlanner.noOfNutritionTank")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -907,7 +995,7 @@ export default function SinchaiPlanner() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-violet-200/70 bg-violet-50/50 p-4">
+            <div className="rounded-xl border border-violet-300/40 bg-violet-950/30 p-4">
               <p className="mb-3 text-sm font-bold text-violet-900">{t("sinchaiPlanner.ecCalibrationTitle")}</p>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
@@ -956,7 +1044,7 @@ export default function SinchaiPlanner() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-sky-200/70 bg-sky-50/50 p-4">
+            <div className="rounded-xl border border-sky-300/40 bg-sky-950/25 p-4">
               <p className="mb-3 text-sm font-bold text-sky-900">{t("sinchaiPlanner.phCalibrationTitle")}</p>
               <div className="space-y-4">
                 <div className="rounded-lg border border-sky-200/70 bg-white/80 p-3">
@@ -1088,6 +1176,18 @@ export default function SinchaiPlanner() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isModeSwitchEStopDialogOpen} onOpenChange={setIsModeSwitchEStopDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("sinchaiPlanner.modeSwitchRunningTitle")}</DialogTitle>
+            <DialogDescription>{t("sinchaiPlanner.modeSwitchRunningDescription")}</DialogDescription>
+          </DialogHeader>
+          <Button type="button" variant="destructive" onClick={handleModeSwitchEStop} disabled={isModeSwitchEStopSubmitting}>
+            {t("dashboard.stop")}
+          </Button>
+        </DialogContent>
+      </Dialog>
+
       {isLoading ? (
         <Card>
           <CardContent className="p-5 text-sm text-muted-foreground">{t("planner.loading")}</CardContent>
@@ -1151,12 +1251,17 @@ export default function SinchaiPlanner() {
                 <Button
                   type="button"
                   onClick={handleManualStart}
-                  disabled={manualRunning || isManualStartSubmitting || manualFertigationRunning}
+                  disabled={manualControlsLocked || manualRunning || isManualStartSubmitting || manualFertigationRunning}
                 >
                   <Play className="mr-2 h-4 w-4" />
                   {t("sinchaiPlanner.startButton")}
                 </Button>
-                <Button type="button" variant="destructive" onClick={handleManualStop} disabled={!manualRunning || isManualStopSubmitting}>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleManualStop}
+                  disabled={manualControlsLocked || !manualRunning || isManualStopSubmitting}
+                >
                   <Square className="mr-2 h-4 w-4" />
                   {t("sinchaiPlanner.stopButton")}
                 </Button>
@@ -1239,7 +1344,23 @@ export default function SinchaiPlanner() {
               </div>
 
               <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.06em] text-violet-700">{t("sinchaiPlanner.nutritionTanks")}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.06em] text-violet-700">{t("sinchaiPlanner.nutritionTanks")}</p>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-violet-300 bg-white text-violet-700 transition hover:bg-violet-100"
+                        aria-label={t("sinchaiPlanner.nutritionTanksInfoLabel")}
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-72 border-violet-200 bg-white/95 text-sm text-slate-700">
+                      {t("sinchaiPlanner.nutritionTanksInfo")}
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 {nutritionTankLabels.length > 0 ? (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {nutritionTankLabels.map((tankLabel) => (
@@ -1269,7 +1390,7 @@ export default function SinchaiPlanner() {
                 <Button
                   type="button"
                   onClick={handleManualFertigationStart}
-                  disabled={manualFertigationRunning || manualRunning || isManualFertigationStartSubmitting}
+                  disabled={manualControlsLocked || manualFertigationRunning || manualRunning || isManualFertigationStartSubmitting}
                 >
                   <Play className="mr-2 h-4 w-4" />
                   {t("sinchaiPlanner.startButton")}
@@ -1345,7 +1466,7 @@ export default function SinchaiPlanner() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t("sinchaiPlanner.status")}</Label>
+                      <Label>{t("sinchaiPlanner.fertigationStatus")}</Label>
                       <div className="flex h-10 items-center justify-between rounded-md border border-input px-3">
                         <span className="text-sm text-slate-700">
                           {schedule.enabled ? t("sinchaiPlanner.enabled") : t("sinchaiPlanner.disabled")}

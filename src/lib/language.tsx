@@ -231,6 +231,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     "sinchaiPlanner.startTime": "Start Time",
     "sinchaiPlanner.duration": "Irrigation Duration (minutes)",
     "sinchaiPlanner.status": "Status",
+    "sinchaiPlanner.fertigationStatus": "FERTIGATION STATUS",
     "sinchaiPlanner.enabled": "Enabled",
     "sinchaiPlanner.disabled": "Disabled",
     "sinchaiPlanner.selectValves": "Select Valves",
@@ -284,6 +285,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     "sinchaiPlanner.manualFertigationStartFailedDescription": "Could not start manual fertigation. Please try again.",
     "sinchaiPlanner.manualFertigationCompletedTitle": "Manual fertigation completed",
     "sinchaiPlanner.manualFertigationCompletedDescription": "Manual fertigation run completed.",
+    "sinchaiPlanner.modeSwitchRunningTitle": "Schedule is running",
+    "sinchaiPlanner.modeSwitchRunningDescription": "Schedule is running, please E-Stop.",
+    "sinchaiPlanner.manualSaveRequiredBeforeRun": "Click Save All to switch to Manual mode, then run the manual system.",
   },
   hi: {
     "common.language": "भाषा",
@@ -502,6 +506,7 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     "sinchaiPlanner.startTime": "शुरू समय",
     "sinchaiPlanner.duration": "सिंचाई अवधि (मिनट)",
     "sinchaiPlanner.status": "स्थिति",
+    "sinchaiPlanner.fertigationStatus": "फर्टिगेशन स्थिति",
     "sinchaiPlanner.enabled": "सक्रिय",
     "sinchaiPlanner.disabled": "निष्क्रिय",
     "sinchaiPlanner.selectValves": "वाल्व चुनें",
@@ -555,6 +560,9 @@ const translations: Record<LanguageCode, Record<string, string>> = {
     "sinchaiPlanner.manualFertigationStartFailedDescription": "मैनुअल फर्टिगेशन शुरू नहीं हो पाया। कृपया फिर प्रयास करें।",
     "sinchaiPlanner.manualFertigationCompletedTitle": "मैनुअल फर्टिगेशन पूर्ण",
     "sinchaiPlanner.manualFertigationCompletedDescription": "मैनुअल फर्टिगेशन रन पूरा हो गया।",
+    "sinchaiPlanner.modeSwitchRunningTitle": "शेड्यूल चल रहा है",
+    "sinchaiPlanner.modeSwitchRunningDescription": "शेड्यूल चल रहा है, कृपया E-Stop करें।",
+    "sinchaiPlanner.manualSaveRequiredBeforeRun": "मैनुअल सिस्टम चलाने से पहले Save All दबाकर मोड अपडेट करें।",
   },
 };
 
