@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Eye, EyeOff } from "lucide-react";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Input } from "./ui/input";
@@ -22,6 +22,7 @@ export function Header() {
   const [forgotOpen, setForgotOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
   const [forgotUserId, setForgotUserId] = useState("");
   const [forgotEmail, setForgotEmail] = useState("");
@@ -347,14 +348,28 @@ export function Header() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="login-password">{t("login.password")}</Label>
-              <Input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t("login.passwordPlaceholder")}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="login-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t("login.passwordPlaceholder")}
+                  className="pr-11"
+                  required
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {showPassword ? "Hide" : "Show"}
+                  </span>
+                </button>
+              </div>
             </div>
             <button
               type="button"

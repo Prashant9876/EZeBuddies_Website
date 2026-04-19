@@ -69,6 +69,67 @@ export async function triggerEStop(args: {
   });
 }
 
+export async function resetManualLog(args: {
+  apiBase: string;
+  token: string;
+  userId: string;
+  farmId: string;
+}) {
+  const url = `${args.apiBase.replace(/\/$/, "")}/reset_manual_log`;
+  return postJson(url, args.token, {
+    user_id: args.userId,
+    farmid: args.farmId,
+  });
+}
+
+export async function startManualIrrigation(args: {
+  apiBase: string;
+  token: string;
+  userId: string;
+  farmId: string;
+  timestamp: string;
+  durationMin: number;
+  valves: string[];
+}) {
+  const url = `${args.apiBase.replace(/\/$/, "")}/start_manual_Irrigation`;
+  return postJson(url, args.token, {
+    user_id: args.userId,
+    farmid: args.farmId,
+    timestamp: args.timestamp,
+    duration_min: args.durationMin,
+    valves: args.valves,
+  });
+}
+
+export async function startManualFertigation(args: {
+  apiBase: string;
+  token: string;
+  userId: string;
+  farmId: string;
+  timestamp: string;
+  ecLowerLimit: number;
+  ecUpperLimit: number;
+  phLowerLimit: number;
+  phUpperLimit: number;
+  nutritionTanks: Record<string, number>;
+}) {
+  const url = `${args.apiBase.replace(/\/$/, "")}/start_manual_fertigtion`;
+  return postJson(url, args.token, {
+    user_id: args.userId,
+    farmid: args.farmId,
+    timestamp: args.timestamp,
+    eC: {
+      LL: args.ecLowerLimit,
+      HL: args.ecUpperLimit,
+    },
+    pH: {
+      LL: args.phLowerLimit,
+      HL: args.phUpperLimit,
+    },
+    nutrition_tanks: args.nutritionTanks,
+  });
+}
+
 export async function fetchHistoricalData(args: {
   apiBase: string;
   token: string;

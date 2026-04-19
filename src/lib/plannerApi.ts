@@ -380,3 +380,370 @@ export async function updatePlannerDevice(args: {
 
   return data;
 }
+
+export type SinchaiSchedule = {
+  schedule_no: number;
+  schedule_name: string;
+  start_time: string;
+  irrigation_duration_min: number | null;
+  valves: string[];
+  days: string[];
+  enabled: boolean;
+  nutrition_tanks?: Record<string, string>;
+  ec_lower_limit?: number | null;
+  ec_upper_limit?: number | null;
+  ph_lower_limit?: number | null;
+  ph_upper_limit?: number | null;
+};
+
+export type SinchaiPlannerDocument = {
+  user_id: string;
+  mode: string;
+  no_of_valves: number;
+  fertigation_time_min: number | null;
+  no_of_nutrition_tank?: number | null;
+  ec_calibration_point?: {
+    concentration_solution_liquid_quantity_ml: number | null;
+    ro_water_liter: number | null;
+    ec_increased_by: number | null;
+  };
+  ph_calibration_point?: {
+    ph_up_basic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_increased_by: number | null;
+    };
+    ph_down_acidic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_decreased_by: number | null;
+    };
+  };
+  manual_log?: {
+    timestamp: string;
+    duration_min: number;
+    valves: string[];
+  } | null;
+  manual_fertigation_log?: {
+    timestamp: string;
+    eC: {
+      LL: number | null;
+      HL: number | null;
+    };
+    pH: {
+      LL: number | null;
+      HL: number | null;
+    };
+    nutrition_tanks: Record<string, string>;
+  } | null;
+  schedules: SinchaiSchedule[];
+};
+
+function asBooleanLoose(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1" || normalized === "on" || normalized === "enabled" || normalized === "auto") return true;
+    if (normalized === "false" || normalized === "0" || normalized === "off" || normalized === "disabled" || normalized === "manual") return false;
+  }
+  return null;
+}
+
+function asNumberLoose(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function asStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => asString(item)).filter((item): item is string => Boolean(item?.trim())).map((item) => item.trim());
+}
+
+function asStringMap(value: unknown) {
+  const obj = readObject(value);
+  if (!obj) return {};
+  return Object.entries(obj).reduce<Record<string, string>>((acc, [key, raw]) => {
+    const text =
+      typeof raw === "number" && Number.isFinite(raw)
+        ? String(raw)
+        : typeof raw === "string"
+          ? raw
+          : undefined;
+    if (text !== undefined && text.trim()) {
+      acc[key.trim()] = text.trim();
+    }
+    return acc;
+  }, {});
+}
+
+function normalizeSinchaiSchedules(source: unknown) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((item, index) => {
+      const row = readObject(item);
+      if (!row) return null;
+      const numberValue = asNumberLoose(row.schedule_no ?? row.scheduleNo ?? row.id);
+      const scheduleNo = numberValue !== null ? Math.max(1, Math.trunc(numberValue)) : index + 1;
+      const duration = asNumberLoose(row.irrigation_duration_min ?? row.duration_min ?? row.duration);
+      const enabled = asBooleanLoose(row.enabled ?? row.is_enabled ?? row.status) ?? true;
+      return {
+        schedule_no: scheduleNo,
+        schedule_name: asString(row.schedule_name) ?? asString(row.name) ?? `Schedule ${index + 1}`,
+        start_time: asString(row.start_time) ?? asString(row.time) ?? "",
+        irrigation_duration_min: duration !== null ? Math.max(0, Math.trunc(duration)) : null,
+        valves: asStringArray(row.valves ?? row.zones ?? row.lines),
+        days: asStringArray(row.days ?? row.repeat_days ?? row.weekdays),
+        enabled,
+        nutrition_tanks: asStringMap(row.nutrition_tanks ?? row.nutritionTanks),
+        ec_lower_limit: asNumberLoose(row.ec_lower_limit ?? row.ecLowerLimit ?? row.ec_min ?? row.ecMin),
+        ec_upper_limit: asNumberLoose(row.ec_upper_limit ?? row.ecUpperLimit ?? row.ec_max ?? row.ecMax),
+        ph_lower_limit: asNumberLoose(row.ph_lower_limit ?? row.phLowerLimit ?? row.ph_min ?? row.phMin),
+        ph_upper_limit: asNumberLoose(row.ph_upper_limit ?? row.phUpperLimit ?? row.ph_max ?? row.phMax),
+      } satisfies SinchaiSchedule;
+    })
+    .filter((item): item is SinchaiSchedule => Boolean(item));
+}
+
+function extractSinchaiObject(data: unknown) {
+  const direct = readObject(data);
+  if (!direct) return null;
+
+  const candidates = [
+    direct,
+    readObject(direct.data),
+    readObject(direct.record),
+    readObject(direct.payload),
+    readObject(direct.planner),
+    readObject(direct.result),
+    readObject(direct.document),
+  ].filter((item): item is Record<string, unknown> => Boolean(item));
+
+  return candidates.find((item) => {
+    if (Array.isArray(item.schedules)) return true;
+    if (Array.isArray(item.schedule)) return true;
+    if (Array.isArray(item.items)) return true;
+    return false;
+  }) ?? candidates[0];
+}
+
+function normalizeSinchaiPlanner(data: unknown, userId: string): SinchaiPlannerDocument | null {
+  const obj = extractSinchaiObject(data);
+  if (!obj) return null;
+
+  const schedules = normalizeSinchaiSchedules(obj.schedules ?? obj.schedule ?? obj.items);
+  const mode = asString(obj.mode) ?? asString(obj.irrigation_mode) ?? asString(obj.control_mode) ?? "Auto";
+  const payloadUserId = asString(obj.user_id) ?? asString(obj.userId) ?? userId;
+  const noOfValves = asNumberLoose(obj.No_of_valves ?? obj.no_of_valves ?? obj.valves_count) ?? 6;
+  const fertigationTime = asNumberLoose(obj.fertigation_time_min ?? obj.fertigationTimeMin ?? obj.fertigation_time);
+  const noOfNutritionTank = asNumberLoose(
+    obj.no_of_nutrition_tank ?? obj.noOfNutritionTank ?? obj.No_of_nutrition_tank ?? obj.nutrition_tank_count,
+  );
+  const ecPointObj = readObject(obj.ec_calibration_point ?? obj.ecCalibrationPoint);
+  const phPointObj = readObject(obj.ph_calibration_point ?? obj.phCalibrationPoint);
+  const phUpObj = readObject(phPointObj?.ph_up_basic_solution ?? phPointObj?.phUpBasicSolution ?? phPointObj?.ph_up);
+  const phDownObj = readObject(phPointObj?.ph_down_acidic_solution ?? phPointObj?.phDownAcidicSolution ?? phPointObj?.ph_down);
+  const ecCalibrationPoint = {
+    concentration_solution_liquid_quantity_ml: asNumberLoose(
+      ecPointObj?.concentration_solution_liquid_quantity_ml ??
+        ecPointObj?.concentrationSolutionLiquidQuantityMl ??
+        ecPointObj?.concentration_ml,
+    ),
+    ro_water_liter: asNumberLoose(ecPointObj?.ro_water_liter ?? ecPointObj?.roWaterLiter ?? ecPointObj?.ro_liter),
+    ec_increased_by: asNumberLoose(ecPointObj?.ec_increased_by ?? ecPointObj?.ecIncreasedBy ?? ecPointObj?.ec_delta),
+  };
+  const phCalibrationPoint = {
+    ph_up_basic_solution: {
+      concentration_solution_liquid_quantity_ml: asNumberLoose(
+        phUpObj?.concentration_solution_liquid_quantity_ml ??
+          phUpObj?.concentrationSolutionLiquidQuantityMl ??
+          phUpObj?.concentration_ml,
+      ),
+      ro_water_liter: asNumberLoose(phUpObj?.ro_water_liter ?? phUpObj?.roWaterLiter ?? phUpObj?.ro_liter),
+      ph_increased_by: asNumberLoose(phUpObj?.ph_increased_by ?? phUpObj?.phIncreasedBy ?? phUpObj?.ph_delta),
+    },
+    ph_down_acidic_solution: {
+      concentration_solution_liquid_quantity_ml: asNumberLoose(
+        phDownObj?.concentration_solution_liquid_quantity_ml ??
+          phDownObj?.concentrationSolutionLiquidQuantityMl ??
+          phDownObj?.concentration_ml,
+      ),
+      ro_water_liter: asNumberLoose(phDownObj?.ro_water_liter ?? phDownObj?.roWaterLiter ?? phDownObj?.ro_liter),
+      ph_decreased_by: asNumberLoose(phDownObj?.ph_decreased_by ?? phDownObj?.phDecreasedBy ?? phDownObj?.ph_delta),
+    },
+  };
+  const manualLogObj = readObject(obj.manual_log ?? obj.manualLog);
+  const manualTimestamp = asString(manualLogObj?.timestamp);
+  const manualDuration = asNumberLoose(manualLogObj?.duration_min ?? manualLogObj?.durationMin);
+  const manualValves = asStringArray(manualLogObj?.valves);
+  const manualLog =
+    manualTimestamp && manualDuration !== null
+      ? {
+          timestamp: manualTimestamp,
+          duration_min: Math.max(0, Math.trunc(manualDuration)),
+          valves: manualValves,
+        }
+      : null;
+  const manualFertigationObj = readObject(obj.manual_fertigation_log ?? obj.manualFertigationLog);
+  const manualFertigationTimestamp = asString(manualFertigationObj?.timestamp);
+  const manualFertigationEcObj = readObject(manualFertigationObj?.eC ?? manualFertigationObj?.ec);
+  const manualFertigationPhObj = readObject(manualFertigationObj?.pH ?? manualFertigationObj?.ph);
+  const manualFertigationNutrition = asStringMap(manualFertigationObj?.nutrition_tanks ?? manualFertigationObj?.nutritionTanks);
+  const manualFertigationLog =
+    manualFertigationTimestamp
+      ? {
+          timestamp: manualFertigationTimestamp,
+          eC: {
+            LL: asNumberLoose(manualFertigationEcObj?.LL ?? manualFertigationEcObj?.ll ?? manualFertigationEcObj?.lower_limit),
+            HL: asNumberLoose(manualFertigationEcObj?.HL ?? manualFertigationEcObj?.hl ?? manualFertigationEcObj?.upper_limit),
+          },
+          pH: {
+            LL: asNumberLoose(manualFertigationPhObj?.LL ?? manualFertigationPhObj?.ll ?? manualFertigationPhObj?.lower_limit),
+            HL: asNumberLoose(manualFertigationPhObj?.HL ?? manualFertigationPhObj?.hl ?? manualFertigationPhObj?.upper_limit),
+          },
+          nutrition_tanks: manualFertigationNutrition,
+        }
+      : null;
+
+  if (schedules.length === 0 && !Array.isArray(obj.schedules) && !Array.isArray(obj.schedule) && !Array.isArray(obj.items)) {
+    return null;
+  }
+
+  return {
+    user_id: payloadUserId,
+    mode,
+    no_of_valves: Math.max(1, Math.trunc(noOfValves)),
+    fertigation_time_min: fertigationTime !== null ? Math.max(0, fertigationTime) : null,
+    no_of_nutrition_tank: noOfNutritionTank !== null ? Math.max(0, Math.trunc(noOfNutritionTank)) : 2,
+    ec_calibration_point: ecCalibrationPoint,
+    ph_calibration_point: phCalibrationPoint,
+    manual_log: manualLog,
+    manual_fertigation_log: manualFertigationLog,
+    schedules,
+  };
+}
+
+function resolveSinchaiPlannerFetchEndpoint() {
+  const explicit = import.meta.env.VITE_SINCHAI_PLANNER_GET_API_URL?.trim();
+  if (explicit) return explicit;
+
+  const apiBase = resolveSopApiBase();
+  if (apiBase) return `${apiBase.replace(/\/$/, "")}/get_sinchai_planer`;
+
+  return "";
+}
+
+function resolveSinchaiPlannerSaveEndpoint() {
+  const explicit = import.meta.env.VITE_SINCHAI_PLANNER_SAVE_API_URL?.trim();
+  if (explicit) return explicit;
+
+  const apiBase = resolveSopApiBase();
+  if (apiBase) return `${apiBase.replace(/\/$/, "")}/update_sinchai_planer`;
+
+  return "";
+}
+
+export async function fetchSinchaiPlanner(args: {
+  token: string;
+  userId: string;
+  section?: string;
+}) {
+  const endpoint = resolveSinchaiPlannerFetchEndpoint();
+  if (!endpoint) {
+    throw new Error("Missing Sinchai planner API endpoint");
+  }
+
+  const url = new URL(endpoint);
+  url.searchParams.set("token_type", "bearer");
+  url.searchParams.set("user_id", args.userId);
+  url.searchParams.set("section", args.section ?? "user_sinchai_planner");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${args.token}`,
+    },
+  });
+
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Sinchai planner API failed (${response.status})`);
+  }
+
+  return normalizeSinchaiPlanner(data, args.userId);
+}
+
+export async function saveSinchaiPlanner(args: {
+  token: string;
+  userId: string;
+  mode: string;
+  noOfValves: number;
+  fertigationTimeMin: number | null;
+  noOfNutritionTank: number | null;
+  ecCalibrationPoint: {
+    concentration_solution_liquid_quantity_ml: number | null;
+    ro_water_liter: number | null;
+    ec_increased_by: number | null;
+  };
+  phCalibrationPoint: {
+    ph_up_basic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_increased_by: number | null;
+    };
+    ph_down_acidic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_decreased_by: number | null;
+    };
+  };
+  schedules: SinchaiSchedule[];
+}) {
+  const endpoint = resolveSinchaiPlannerSaveEndpoint();
+  if (!endpoint) {
+    throw new Error("Missing Sinchai planner save API endpoint");
+  }
+
+  const body: Record<string, unknown> = {
+    user_id: args.userId,
+    mode: args.mode,
+    No_of_valves: Math.max(1, Math.trunc(args.noOfValves)),
+    fertigation_time_min: args.fertigationTimeMin,
+    no_of_nutrition_tank: args.noOfNutritionTank,
+    ec_calibration_point: args.ecCalibrationPoint,
+    ph_calibration_point: args.phCalibrationPoint,
+    schedules: args.schedules,
+  };
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${args.token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Sinchai planner save API failed (${response.status})`);
+  }
+
+  return data;
+}

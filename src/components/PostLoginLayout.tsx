@@ -5,7 +5,7 @@ import { clearStoredAuth, getStoredAuthToken, getStoredLoginResponse } from "@/l
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useLanguage } from "@/lib/language";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, LayoutDashboard, Sprout, Droplets, ChevronDown, Sparkles } from "lucide-react";
+import { Menu, X, LayoutDashboard, Sprout, Droplets, ChevronDown, Sparkles, BarChart3 } from "lucide-react";
 import logo from "@/assets/devices/logo.png";
 
 function pickString(...values: unknown[]) {
@@ -15,6 +15,62 @@ function pickString(...values: unknown[]) {
   return null;
 }
 
+function asString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
+function readObject(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function parseDeviceTypeCount(source: unknown) {
+  if (!Array.isArray(source)) return { sensors: 0, actuators: 0, total: 0 };
+
+  let sensors = 0;
+  let actuators = 0;
+  let total = 0;
+  for (const item of source) {
+    const obj = readObject(item);
+    if (!obj) continue;
+    const type = asString(obj.device_type) ?? asString(obj.Device_Type) ?? "";
+    if (!type) continue;
+    total += 1;
+    const normalized = type.trim().toLowerCase();
+    if (normalized === "sensors") sensors += 1;
+    if (normalized === "actuators") actuators += 1;
+  }
+  return { sensors, actuators, total };
+}
+
+function extractDeviceCounts(response: Record<string, unknown> | null) {
+  const rootDevices = response?.devices;
+  const user = readObject(response?.user);
+  const userDevices = user?.devices;
+
+  const rootCount = parseDeviceTypeCount(rootDevices);
+  const userCount = parseDeviceTypeCount(userDevices);
+  if (rootCount.total > 0) return rootCount;
+  if (userCount.total > 0) return userCount;
+
+  const rootSolutions = Array.isArray(response?.solutions) ? response?.solutions : [];
+  const userSolutions = user && Array.isArray(user.solutions) ? user.solutions : [];
+  const solutionSource = rootSolutions.length > 0 ? rootSolutions : userSolutions;
+  if (!Array.isArray(solutionSource)) return { sensors: 0, actuators: 0, total: 0 };
+
+  let sensors = 0;
+  let actuators = 0;
+  let total = 0;
+  for (const item of solutionSource) {
+    const obj = readObject(item);
+    const devices = obj?.devices;
+    const count = parseDeviceTypeCount(devices);
+    sensors += count.sensors;
+    actuators += count.actuators;
+    total += count.total;
+  }
+  return { sensors, actuators, total };
+}
+
 export function PostLoginLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,19 +78,52 @@ export function PostLoginLayout() {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const token = useMemo(() => getStoredAuthToken(), []);
   const loginResponse = useMemo(() => getStoredLoginResponse(), []);
-  const userInfo =
-    loginResponse?.user && typeof loginResponse.user === "object" && !Array.isArray(loginResponse.user)
-      ? (loginResponse.user as Record<string, unknown>)
+  const dataInfo =
+    loginResponse?.data && typeof loginResponse.data === "object" && !Array.isArray(loginResponse.data)
+      ? (loginResponse.data as Record<string, unknown>)
       : null;
-  const userId = pickString(loginResponse?.user_id, userInfo?.user_id, userInfo?.id) ?? t("dashboard.notAvailable");
-  const email = pickString(loginResponse?.email, userInfo?.email) ?? t("dashboard.notAvailable");
-  const phone = pickString(loginResponse?.phone, userInfo?.phone, userInfo?.mobile, userInfo?.contact_number) ?? t("dashboard.notAvailable");
+  const userInfo =
+    (loginResponse?.user && typeof loginResponse.user === "object" && !Array.isArray(loginResponse.user)
+      ? (loginResponse.user as Record<string, unknown>)
+      : null) ??
+    (dataInfo?.user && typeof dataInfo.user === "object" && !Array.isArray(dataInfo.user)
+      ? (dataInfo.user as Record<string, unknown>)
+      : null);
+  const userId =
+    pickString(loginResponse?.user_id, dataInfo?.user_id, userInfo?.user_id, userInfo?.id, userInfo?.userId) ?? t("dashboard.notAvailable");
+  const email = pickString(loginResponse?.email, dataInfo?.email, userInfo?.email) ?? t("dashboard.notAvailable");
+  const phone =
+    pickString(
+      loginResponse?.phone,
+      loginResponse?.Phone,
+      dataInfo?.phone,
+      dataInfo?.Phone,
+      userInfo?.phone,
+      userInfo?.Phone,
+      userInfo?.mobile,
+      userInfo?.mobile_number,
+      userInfo?.phone_number,
+      userInfo?.contact_number,
+      userInfo?.contactNumber,
+    ) ?? t("dashboard.notAvailable");
   const farmLocation =
     pickString(
       loginResponse?.farm_location,
+      loginResponse?.Farm_location,
+      loginResponse?.farmLocation,
+      loginResponse?.FarmLocation,
       loginResponse?.location,
       loginResponse?.address,
+      dataInfo?.farm_location,
+      dataInfo?.Farm_location,
+      dataInfo?.farmLocation,
+      dataInfo?.FarmLocation,
+      dataInfo?.location,
+      dataInfo?.address,
       userInfo?.farm_location,
+      userInfo?.Farm_location,
+      userInfo?.farmLocation,
+      userInfo?.FarmLocation,
       userInfo?.location,
       userInfo?.address,
     ) ?? t("dashboard.notAvailable");
@@ -44,6 +133,7 @@ export function PostLoginLayout() {
       : location.pathname === "/dashboard/sinchai-planner"
         ? t("dashboard.sinchaiPlanner")
         : t("dashboard.homeButton");
+  const deviceCounts = useMemo(() => extractDeviceCounts(loginResponse), [loginResponse]);
 
   useEffect(() => {
     if (!token || !loginResponse) {
@@ -116,6 +206,27 @@ export function PostLoginLayout() {
                 <div className="rounded-xl border border-white/20 bg-white/10 p-3 text-xs text-white/90 backdrop-blur">
                   <p className="truncate"><span className="font-semibold">{t("dashboard.phoneLabel")}:</span> {phone}</p>
                   <p className="truncate"><span className="font-semibold">{t("dashboard.farmLocationLabel")}:</span> {farmLocation}</p>
+                </div>
+
+                <div className="rounded-xl border border-white/20 bg-white/10 p-3 backdrop-blur">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/90">
+                    <BarChart3 className="h-3.5 w-3.5" />
+                    {t("dashboard.deviceSummaryTitle")}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px] text-white/90">
+                    <div className="rounded-lg border border-white/20 bg-white/10 p-2 text-center">
+                      <p className="font-semibold">{t("dashboard.sensor")}</p>
+                      <p className="mt-0.5 text-sm font-bold">{deviceCounts.sensors}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/20 bg-white/10 p-2 text-center">
+                      <p className="font-semibold">{t("dashboard.actuator")}</p>
+                      <p className="mt-0.5 text-sm font-bold">{deviceCounts.actuators}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/20 bg-white/10 p-2 text-center">
+                      <p className="font-semibold">{t("dashboard.devices")}</p>
+                      <p className="mt-0.5 text-sm font-bold">{deviceCounts.total}</p>
+                    </div>
+                  </div>
                 </div>
 
                 <nav className="space-y-2">

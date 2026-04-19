@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Gauge, Thermometer, Droplets, Leaf, Cpu, ToggleLeft, RefreshCw, Sparkles } from "lucide-react";
+import { Gauge, Thermometer, Droplets, Leaf, Cpu, ToggleLeft, RefreshCw, Wind, Sunrise, Sunset, CloudSun, Clock3, CalendarDays, Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -11,6 +11,7 @@ import { motion } from "framer-motion";
 import { useLanguage } from "@/lib/language";
 import { applySeo } from "@/lib/seo";
 import { changeRelayState, fetchHistoricalData, triggerEStop } from "@/lib/dashboardControlApi";
+import { fetchSinchaiPlanner, type SinchaiSchedule } from "@/lib/plannerApi";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type Device = {
@@ -157,12 +158,12 @@ function metricFromSeed(seed: number, min: number, max: number, fractionDigits =
   return Number(value.toFixed(fractionDigits));
 }
 
-function buildDeviceCounts(devices: Device[]) {
-  const byName: Record<string, number> = {};
-  for (const device of devices) {
-    byName[device.device_name] = (byName[device.device_name] ?? 0) + 1;
-  }
-  return byName;
+function normalizeIdentifier(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function isSmartSinchaiSolution(solutionName: string) {
+  return normalizeIdentifier(solutionName).includes("smartsinchai");
 }
 
 type RealtimeRecord = Record<string, unknown>;
@@ -181,6 +182,31 @@ type HistoricalPoint = {
   temperature: number | null;
   humidity: number | null;
   co2: number | null;
+};
+
+type WeatherSnapshot = {
+  resolvedName: string;
+  current: {
+    temp: number | null;
+    feelsLike: number | null;
+    humidity: number | null;
+    wind: number | null;
+    precipitation: number | null;
+    pressure: number | null;
+    cloud: number | null;
+  };
+  daily: Array<{
+    date: string;
+    max: number | null;
+    min: number | null;
+    uvMax: number | null;
+    humidityAvg: number | null;
+    cloudAvg: number | null;
+    precipitationSum: number | null;
+    precipitationProbMax: number | null;
+    sunrise: string | null;
+    sunset: string | null;
+  }>;
 };
 
 function getRecordDeviceId(record: RealtimeRecord) {
@@ -226,6 +252,58 @@ function formatHistoryLabel(timestamp: string) {
     minute: "2-digit",
     hour12: false,
   }).format(date);
+}
+
+function isMicroLocation(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return true;
+  return /^room\d*$/i.test(normalized) || /^zone\d*$/i.test(normalized) || /^section\d*$/i.test(normalized);
+}
+
+function parseLatLong(value: string | null) {
+  if (!value) return null;
+  const match = value.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (!match) return null;
+  const lat = Number(match[1]);
+  const lon = Number(match[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { lat, lon };
+}
+
+function isCoordinateLabel(value: string | null) {
+  if (!value) return false;
+  return /^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(value.trim());
+}
+
+function formatTimeFromIso(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+}
+
+function getBrowserCoordinates() {
+  return new Promise<{ lat: number; lon: number }>((resolve, reject) => {
+    if (typeof window === "undefined" || !("geolocation" in navigator)) {
+      reject(new Error("Geolocation not supported"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          lat: position.coords.latitude,
+          lon: position.coords.longitude,
+        });
+      },
+      (error) => reject(error),
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 5 * 60 * 1000,
+      },
+    );
+  });
 }
 
 function formatRelayName(key: string) {
@@ -446,7 +524,7 @@ function EnvironmentIntelCard({
           <p className="text-2xl font-semibold text-lime-900">{co2} ppm</p>
         </div>
         <Button className="mt-1 w-full" onClick={() => onViewGraph?.(device)}>
-          View Graph
+          {t("dashboard.viewGraph")}
         </Button>
       </CardContent>
     </Card>
@@ -506,8 +584,151 @@ function IrrigationIntelCard({
           <p className="text-2xl font-semibold text-orange-900">{soilTemperature}°C</p>
         </div>
         <Button className="mt-1 w-full" onClick={() => onViewGraph?.(device)}>
-          View Graph
+          {t("dashboard.viewGraph")}
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SinchaiSummaryCard({
+  mode,
+  schedules,
+  t,
+  loading,
+  fertigationTimeMin,
+  onOpenPlanner,
+}: {
+  mode: string;
+  schedules: SinchaiSchedule[];
+  t: TranslateFn;
+  loading: boolean;
+  fertigationTimeMin: number | null;
+  onOpenPlanner: () => void;
+}) {
+  const enabledCount = schedules.filter((item) => item.enabled).length;
+  const isManualMode = mode.toLowerCase() === "manual";
+  return (
+    <Card className="hover-lift overflow-hidden border-cyan-200/70 shadow-[0_14px_38px_-20px_rgba(10,130,145,0.58)]">
+      <div className="bg-gradient-to-r from-cyan-500 to-teal-600 px-5 py-4 text-white">
+        <h3 className="font-display text-xl font-semibold">{t("dashboard.sinchaiSummaryTitle")}</h3>
+      </div>
+      <CardContent className="space-y-4 p-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="rounded-xl border border-cyan-100 bg-cyan-50/70 p-3">
+            <p className="text-xs text-cyan-700">{t("dashboard.totalSchedules")}</p>
+            <p className="text-2xl font-semibold text-cyan-900">{schedules.length}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3">
+            <p className="text-xs text-emerald-700">{t("dashboard.enabledSchedules")}</p>
+            <p className="text-2xl font-semibold text-emerald-900">{enabledCount}</p>
+          </div>
+          <motion.div
+            className={`rounded-xl border p-3 ${
+              isManualMode
+                ? "border-amber-200 bg-amber-50/80"
+                : "border-sky-200 bg-sky-50/70"
+            }`}
+            animate={
+              isManualMode
+                ? {
+                    scale: [1, 1.02, 1],
+                    boxShadow: [
+                      "0 0 0 rgba(251,191,36,0)",
+                      "0 0 0 6px rgba(251,191,36,0.18)",
+                      "0 0 0 rgba(251,191,36,0)",
+                    ],
+                  }
+                : { scale: 1, boxShadow: "0 0 0 rgba(0,0,0,0)" }
+            }
+            transition={{ duration: 1.2, repeat: isManualMode ? Infinity : 0, ease: "easeInOut" }}
+          >
+            <p className="text-xs text-slate-700">{t("dashboard.mode")}</p>
+            <p
+              className={`text-xl leading-tight ${
+                isManualMode ? "font-black text-amber-700" : "font-semibold text-sky-900"
+              }`}
+            >
+              {t("dashboard.mode")}: {mode}
+            </p>
+          </motion.div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <p className="text-xs text-slate-600">{t("dashboard.disabledSchedules")}</p>
+            <p className="text-2xl font-semibold text-slate-900">{Math.max(0, schedules.length - enabledCount)}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3">
+            <p className="text-xs text-emerald-700">{t("sinchaiPlanner.fertigationTimeMin")}</p>
+            <p className="text-2xl font-semibold text-emerald-900">{fertigationTimeMin ?? "--"}</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-muted-foreground">{t("planner.loading")}</p>
+        ) : schedules.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("dashboard.noSchedules")}</p>
+        ) : (
+          <div className="relative pb-1">
+            {isManualMode && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/55 p-3">
+                <motion.div
+                  initial={{ opacity: 0.7, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="max-w-xl rounded-xl border border-amber-200 bg-white/95 p-4 text-center shadow-lg backdrop-blur-sm"
+                >
+                  <p className="text-sm font-bold text-amber-800">{t("dashboard.sinchaiManualOverlayMessage")}</p>
+                  <Button type="button" size="sm" className="mt-3" onClick={onOpenPlanner}>
+                    {t("dashboard.openSinchaiPlanner")}
+                  </Button>
+                </motion.div>
+              </div>
+            )}
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {schedules.map((schedule) => (
+                <div
+                  key={`sinchai-summary-${schedule.schedule_no}`}
+                  className={`rounded-xl border border-cyan-200/70 bg-gradient-to-br from-white to-cyan-50/60 p-3 shadow-[0_10px_24px_-18px_rgba(8,105,150,0.6)] ${
+                    isManualMode ? "blur-[1px]" : ""
+                  }`}
+                >
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">{schedule.schedule_name || `Schedule ${schedule.schedule_no}`}</p>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        schedule.enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      <Power className="h-3 w-3" />
+                      {schedule.enabled ? t("sinchaiPlanner.enabled") : t("sinchaiPlanner.disabled")}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 text-xs text-slate-700">
+                    <p className="inline-flex items-center gap-1.5">
+                      <Clock3 className="h-3.5 w-3.5 text-cyan-700" />
+                      <span className="font-medium">{t("sinchaiPlanner.startTime")}:</span> {schedule.start_time || "--"}
+                    </p>
+                    <p className="inline-flex items-center gap-1.5">
+                      <Gauge className="h-3.5 w-3.5 text-indigo-700" />
+                      <span className="font-medium">{t("sinchaiPlanner.duration")}:</span> {schedule.irrigation_duration_min ?? "--"} min
+                    </p>
+                    <p className="inline-flex items-center gap-1.5">
+                      <CalendarDays className="h-3.5 w-3.5 text-emerald-700" />
+                      <span className="font-medium">{t("sinchaiPlanner.repeatDays")}:</span>{" "}
+                      {schedule.days.length > 0 ? schedule.days.join(", ") : "--"}
+                    </p>
+                    <p className="inline-flex items-start gap-1.5">
+                      <Droplets className="mt-0.5 h-3.5 w-3.5 text-sky-700" />
+                      <span>
+                        <span className="font-medium">{t("sinchaiPlanner.selectValves")}:</span>{" "}
+                        {schedule.valves.length > 0 ? schedule.valves.join(", ") : "--"}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -534,7 +755,15 @@ export default function LoginDashboard() {
       resolveApiBase(
         import.meta.env.VITE_DEVICE_CONTROL_API_BASE_URL,
         import.meta.env.VITE_PLANNER_API_URL,
-        import.meta.env.VITE_FORGOT_PASSWORD_API_URL,
+      ),
+    [],
+  );
+  const historicalApiBase = useMemo(
+    () =>
+      resolveApiBase(
+        import.meta.env.VITE_HISTORICAL_DATA_API_BASE_URL,
+        import.meta.env.VITE_DEVICE_CONTROL_API_BASE_URL,
+        import.meta.env.VITE_PLANNER_API_URL,
       ),
     [],
   );
@@ -547,11 +776,37 @@ export default function LoginDashboard() {
   const [isGraphDialogOpen, setIsGraphDialogOpen] = useState(false);
   const [selectedGraphDevice, setSelectedGraphDevice] = useState<Device | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<HistoricalMetric>("temperature");
-  const [selectedRange, setSelectedRange] = useState<0.5 | 1 | 3>(0.5);
+  const [selectedRange, setSelectedRange] = useState<0.5 | 1 | 3>(1);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [graphData, setGraphData] = useState<HistoricalPoint[]>([]);
-  const quantityByName = useMemo(() => buildDeviceCounts(devices), [devices]);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [weatherData, setWeatherData] = useState<WeatherSnapshot | null>(null);
+  const [sinchaiSchedules, setSinchaiSchedules] = useState<SinchaiSchedule[]>([]);
+  const [sinchaiMode, setSinchaiMode] = useState("Auto");
+  const [sinchaiFertigationTimeMin, setSinchaiFertigationTimeMin] = useState<number | null>(null);
+  const [sinchaiLoading, setSinchaiLoading] = useState(false);
+
+  const weatherLocationQuery = useMemo(() => {
+    const userObj = readObject(loginResponse?.user);
+    const candidates = [
+      asNonEmptyString(loginResponse?.farm_location),
+      asNonEmptyString(loginResponse?.location),
+      asNonEmptyString(loginResponse?.address),
+      asNonEmptyString(userObj?.farm_location),
+      asNonEmptyString(userObj?.location),
+      asNonEmptyString(userObj?.address),
+      ...devices.map((device) => asNonEmptyString(device.deployed_at)),
+    ].filter((value): value is string => Boolean(value));
+
+    const liveLocation = candidates.find((value) => !isMicroLocation(value)) ?? null;
+    if (liveLocation) return liveLocation;
+    const fallbackLocation = asNonEmptyString(import.meta.env.VITE_WEATHER_FALLBACK_LOCATION);
+    return fallbackLocation ?? null;
+  }, [loginResponse, devices]);
+  const weatherCoords = useMemo(() => parseLatLong(weatherLocationQuery), [weatherLocationQuery]);
+
   useEffect(() => {
     if (!token || !loginResponse) {
       navigate("/");
@@ -616,10 +871,189 @@ export default function LoginDashboard() {
     return () => clearInterval(interval);
   }, [token, userId, refreshRealtimeData]);
 
+  useEffect(() => {
+    if (!token || !userId) return;
+    let mounted = true;
+
+    const loadSinchaiSummary = async () => {
+      setSinchaiLoading(true);
+      try {
+        const data = await fetchSinchaiPlanner({
+          token,
+          userId,
+          section: "user_sinchai_planner",
+        });
+        if (!mounted) return;
+        setSinchaiMode(data?.mode || "Auto");
+        setSinchaiSchedules(data?.schedules ?? []);
+        setSinchaiFertigationTimeMin(typeof data?.fertigation_time_min === "number" ? data.fertigation_time_min : null);
+      } catch (error) {
+        console.error("Sinchai planner summary fetch failed:", error);
+        if (!mounted) return;
+        setSinchaiMode("Auto");
+        setSinchaiSchedules([]);
+        setSinchaiFertigationTimeMin(null);
+      } finally {
+        if (mounted) setSinchaiLoading(false);
+      }
+    };
+
+    loadSinchaiSummary();
+    const interval = window.setInterval(loadSinchaiSummary, 5 * 60 * 1000);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, [token, userId]);
+
+  const refreshWeather = useCallback(async () => {
+    setWeatherLoading(true);
+    setWeatherError(null);
+    try {
+      let latitude: number;
+      let longitude: number;
+      let resolvedName = weatherLocationQuery ?? "GPS";
+      let resolvedFromSource = false;
+
+      // 1) Prefer browser/device GPS location when available.
+      try {
+        const coords = await getBrowserCoordinates();
+        latitude = coords.lat;
+        longitude = coords.lon;
+        resolvedName = `${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)}`;
+        resolvedFromSource = true;
+      } catch {
+        resolvedFromSource = false;
+      }
+
+      // 2) Fallback to explicit lat,long text (if provided).
+      if (!resolvedFromSource && weatherCoords) {
+        latitude = weatherCoords.lat;
+        longitude = weatherCoords.lon;
+        resolvedName = `${weatherCoords.lat.toFixed(4)}, ${weatherCoords.lon.toFixed(4)}`;
+        resolvedFromSource = true;
+      }
+
+      // 3) Fallback to geocoding location text.
+      if (!resolvedFromSource && weatherLocationQuery) {
+        const geocodeRes = await fetch(
+          `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(weatherLocationQuery)}&count=1&language=en&format=json`,
+        );
+        const geocodeJson = (await geocodeRes.json()) as { results?: Array<{ latitude: number; longitude: number; name: string; admin1?: string; country?: string }> };
+        const first = geocodeJson.results?.[0];
+        if (!first) {
+          setWeatherError(t("dashboard.weatherUnavailable"));
+          setWeatherData(null);
+          return;
+        }
+        latitude = first.latitude;
+        longitude = first.longitude;
+        resolvedName = [first.name, first.admin1, first.country].filter(Boolean).join(", ");
+        resolvedFromSource = true;
+      }
+
+      if (!resolvedFromSource) {
+        setWeatherError(t("dashboard.weatherUnavailable"));
+        setWeatherData(null);
+        return;
+      }
+
+      const weatherRes = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,cloud_cover,pressure_msl,wind_speed_10m&hourly=relative_humidity_2m,cloud_cover&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_sum,precipitation_probability_max&forecast_days=7&timezone=auto`,
+      );
+      const weatherJson = (await weatherRes.json()) as Record<string, unknown>;
+      const current = readObject(weatherJson.current);
+      const daily = readObject(weatherJson.daily);
+      const hourly = readObject(weatherJson.hourly);
+
+      const time = Array.isArray(daily?.time) ? daily.time : [];
+      const maxArr = Array.isArray(daily?.temperature_2m_max) ? daily.temperature_2m_max : [];
+      const minArr = Array.isArray(daily?.temperature_2m_min) ? daily.temperature_2m_min : [];
+      const uvArr = Array.isArray(daily?.uv_index_max) ? daily.uv_index_max : [];
+      const precipitationSumArr = Array.isArray(daily?.precipitation_sum) ? daily.precipitation_sum : [];
+      const precipitationProbMaxArr = Array.isArray(daily?.precipitation_probability_max) ? daily.precipitation_probability_max : [];
+      const sunriseArr = Array.isArray(daily?.sunrise) ? daily.sunrise : [];
+      const sunsetArr = Array.isArray(daily?.sunset) ? daily.sunset : [];
+
+      const hourlyTime = Array.isArray(hourly?.time) ? hourly.time : [];
+      const hourlyHumidity = Array.isArray(hourly?.relative_humidity_2m) ? hourly.relative_humidity_2m : [];
+      const hourlyCloud = Array.isArray(hourly?.cloud_cover) ? hourly.cloud_cover : [];
+
+      const dailyHumidityCloudMap = new Map<string, { humiditySum: number; humidityCount: number; cloudSum: number; cloudCount: number }>();
+      for (let i = 0; i < hourlyTime.length; i += 1) {
+        const rawTime = hourlyTime[i];
+        if (typeof rawTime !== "string") continue;
+        const dateKey = rawTime.slice(0, 10);
+        const prev = dailyHumidityCloudMap.get(dateKey) ?? {
+          humiditySum: 0,
+          humidityCount: 0,
+          cloudSum: 0,
+          cloudCount: 0,
+        };
+        const hum = toOptionalMetric(hourlyHumidity[i]);
+        const cloud = toOptionalMetric(hourlyCloud[i]);
+        if (typeof hum === "number") {
+          prev.humiditySum += hum;
+          prev.humidityCount += 1;
+        }
+        if (typeof cloud === "number") {
+          prev.cloudSum += cloud;
+          prev.cloudCount += 1;
+        }
+        dailyHumidityCloudMap.set(dateKey, prev);
+      }
+
+      const dailyData: WeatherSnapshot["daily"] = time.slice(0, 3).map((day, index) => ({
+        date: typeof day === "string" ? day : "",
+        max: toOptionalMetric(maxArr[index]),
+        min: toOptionalMetric(minArr[index]),
+        uvMax: toOptionalMetric(uvArr[index]),
+        humidityAvg:
+          typeof day === "string" && dailyHumidityCloudMap.get(day)?.humidityCount
+            ? Number((dailyHumidityCloudMap.get(day)!.humiditySum / dailyHumidityCloudMap.get(day)!.humidityCount).toFixed(1))
+            : null,
+        cloudAvg:
+          typeof day === "string" && dailyHumidityCloudMap.get(day)?.cloudCount
+            ? Number((dailyHumidityCloudMap.get(day)!.cloudSum / dailyHumidityCloudMap.get(day)!.cloudCount).toFixed(1))
+            : null,
+        precipitationSum: toOptionalMetric(precipitationSumArr[index]),
+        precipitationProbMax: toOptionalMetric(precipitationProbMaxArr[index]),
+        sunrise: formatTimeFromIso(typeof sunriseArr[index] === "string" ? sunriseArr[index] : null),
+        sunset: formatTimeFromIso(typeof sunsetArr[index] === "string" ? sunsetArr[index] : null),
+      }));
+
+      setWeatherData({
+        resolvedName,
+        current: {
+          temp: toOptionalMetric(current?.temperature_2m),
+          feelsLike: toOptionalMetric(current?.apparent_temperature),
+          humidity: toOptionalMetric(current?.relative_humidity_2m),
+          wind: toOptionalMetric(current?.wind_speed_10m),
+          precipitation: toOptionalMetric(current?.precipitation),
+          pressure: toOptionalMetric(current?.pressure_msl),
+          cloud: toOptionalMetric(current?.cloud_cover),
+        },
+        daily: dailyData,
+      });
+    } catch (error) {
+      console.error("Weather API failed:", error);
+      setWeatherError(t("dashboard.weatherUnavailable"));
+      setWeatherData(null);
+    } finally {
+      setWeatherLoading(false);
+    }
+  }, [weatherLocationQuery, weatherCoords, t]);
+
+  useEffect(() => {
+    refreshWeather();
+    const interval = setInterval(refreshWeather, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [refreshWeather]);
+
   const loadHistoricalGraph = useCallback(async () => {
     if (!isGraphDialogOpen || !selectedGraphDevice) return;
-    if (!token || !userId || !controlApiBase) {
-      setGraphError("Missing token/user/api base");
+    if (!token || !userId || !historicalApiBase) {
+      setGraphError(t("dashboard.historicalErrorMissingConfig"));
       setGraphData([]);
       return;
     }
@@ -627,7 +1061,7 @@ export default function LoginDashboard() {
     setGraphError(null);
     try {
       const response = (await fetchHistoricalData({
-        apiBase: controlApiBase,
+        apiBase: historicalApiBase,
         token,
         userId,
         deviceId: selectedGraphDevice.device_id,
@@ -655,12 +1089,12 @@ export default function LoginDashboard() {
       setGraphData(points);
     } catch (error) {
       console.error("Historical data API failed:", error);
-      setGraphError("Could not load historical data");
+      setGraphError(t("dashboard.historicalErrorFetch"));
       setGraphData([]);
     } finally {
       setGraphLoading(false);
     }
-  }, [isGraphDialogOpen, selectedGraphDevice, token, userId, controlApiBase, selectedRange]);
+  }, [isGraphDialogOpen, selectedGraphDevice, token, userId, historicalApiBase, selectedRange, t]);
 
   useEffect(() => {
     loadHistoricalGraph();
@@ -669,7 +1103,7 @@ export default function LoginDashboard() {
   const openGraphForDevice = (device: Device) => {
     setSelectedGraphDevice(device);
     setSelectedMetric("temperature");
-    setSelectedRange(0.5);
+    setSelectedRange(1);
     setGraphData([]);
     setGraphError(null);
     setIsGraphDialogOpen(true);
@@ -840,19 +1274,6 @@ export default function LoginDashboard() {
           transition={{ duration: 0.45, ease: "easeOut", delay: 0.05 }}
           className="space-y-6"
         >
-          <div className="rounded-2xl border border-sky-200/70 bg-gradient-to-r from-white via-sky-50/70 to-cyan-50/70 p-4 shadow-[0_15px_35px_-24px_rgba(2,80,130,0.6)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-700/80">Realtime Operations</p>
-                <p className="mt-1 text-sm text-slate-600">Monitor live telemetry and control your farm devices in one place.</p>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-800">
-                <Sparkles className="h-3.5 w-3.5" />
-                Smart IoT View
-              </div>
-            </div>
-          </div>
-
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">{t("dashboard.title")}</h1>
             <div className="flex items-center gap-2">
@@ -863,24 +1284,160 @@ export default function LoginDashboard() {
             </div>
           </div>
 
-          <Card className="hover-lift border-sky-200/60">
+          <Card className="hover-lift overflow-visible border-cyan-200/70 shadow-[0_18px_42px_-26px_rgba(8,110,190,0.55)]">
             <CardHeader>
-              <CardTitle>{t("dashboard.deviceSummaryTitle")}</CardTitle>
-              <CardDescription>{t("dashboard.deviceSummaryDescription")}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-              {Object.entries(quantityByName).length === 0 && (
-                <p className="text-sm text-muted-foreground">{t("dashboard.noDevices")}</p>
-              )}
-              {Object.entries(quantityByName).map(([name, count]) => (
-                <div key={name} className="rounded-xl border border-border bg-muted/30 p-3 transition hover:-translate-y-0.5 hover:border-sky-300/70 hover:bg-sky-50/70">
-                  <p className="text-sm text-muted-foreground"></p>
-                  <p className="font-semibold text-foreground">{name}</p>
-                  <p className="mt-1 text-sm">
-                    {t("dashboard.quantity")}: <span className="font-semibold">{count}</span>
-                  </p>
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-cyan-200/60 bg-gradient-to-r from-cyan-50 via-sky-50 to-indigo-50 p-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CloudSun className="h-5 w-5 text-cyan-600" />
+                    {t("dashboard.weatherTitle")}
+                  </CardTitle>
+                  <CardDescription>
+                    {t("dashboard.weatherDescription")}
+                    {weatherData?.resolvedName && !isCoordinateLabel(weatherData.resolvedName)
+                      ? ` • ${weatherData.resolvedName}`
+                      : weatherLocationQuery && !isCoordinateLabel(weatherLocationQuery)
+                        ? ` • ${weatherLocationQuery}`
+                        : ""}
+                  </CardDescription>
                 </div>
-              ))}
+                <Button variant="outline" size="sm" onClick={refreshWeather} disabled={weatherLoading}>
+                  {weatherLoading ? t("dashboard.refreshing") : t("dashboard.refreshNow")}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {weatherLoading ? (
+                <p className="text-sm text-muted-foreground">{t("dashboard.weatherLoading")}</p>
+              ) : weatherError ? (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                  <div className="group relative">
+                    <button
+                      type="button"
+                      className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700"
+                      aria-label="Location help"
+                    >
+                      AI
+                    </button>
+                    <div className="pointer-events-none absolute bottom-[calc(100%+6px)] left-0 z-30 w-72 max-w-[calc(100vw-2.5rem)] rounded-lg border border-amber-200 bg-white p-2 text-xs text-slate-700 opacity-0 shadow-lg transition-opacity duration-100 group-hover:opacity-100">
+                      Allow location in browser, refresh page, enable device GPS. If blocked, reset Location permission in browser settings.
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-amber-800">Please allow GPS/location to get weather data.</p>
+                </div>
+              ) : weatherData ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3">
+                      <p className="text-xs font-medium text-emerald-700">{t("dashboard.weatherTemp")}</p>
+                      <p className="text-xl font-semibold text-emerald-900">{weatherData.current.temp ?? "--"}°C</p>
+                    </div>
+                    <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-3">
+                      <p className="text-xs font-medium text-sky-700">{t("dashboard.weatherFeelsLike")}</p>
+                      <p className="text-xl font-semibold text-sky-900">{weatherData.current.feelsLike ?? "--"}°C</p>
+                    </div>
+                    <div className="rounded-xl border border-cyan-200 bg-cyan-50/70 p-3">
+                      <p className="text-xs font-medium text-cyan-700">{t("dashboard.humidity")}</p>
+                      <p className="text-xl font-semibold text-cyan-900">{weatherData.current.humidity ?? "--"}%</p>
+                    </div>
+                    <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-3">
+                      <p className="inline-flex items-center gap-1 text-xs font-medium text-violet-700">
+                        <Wind className="h-3.5 w-3.5" />
+                        {t("dashboard.weatherWind")}
+                      </p>
+                      <p className="text-xl font-semibold text-violet-900">{weatherData.current.wind ?? "--"} km/h</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-3">
+                      <p className="text-xs font-medium text-blue-700">{t("dashboard.weatherRain")}</p>
+                      <p className="text-xl font-semibold text-blue-900">{weatherData.current.precipitation ?? "--"} mm</p>
+                    </div>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                      <p className="text-xs font-medium text-amber-700">{t("dashboard.weatherPressure")}</p>
+                      <p className="text-xl font-semibold text-amber-900">{weatherData.current.pressure ?? "--"} hPa</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-300 bg-slate-50/70 p-3">
+                      <p className="text-xs font-medium text-slate-600">{t("dashboard.weatherCloud")}</p>
+                      <p className="text-xl font-semibold text-slate-900">{weatherData.current.cloud ?? "--"}%</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-700">{t("dashboard.weatherForecast")}</h3>
+                      <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-800">
+                        {t("dashboard.weatherRainChance")}:{" "}
+                        <span className="ml-1 font-bold">
+                          {typeof weatherData.current.cloud === "number"
+                            ? weatherData.current.cloud >= 70
+                              ? t("dashboard.weatherRainChanceHigh")
+                              : weatherData.current.cloud >= 35
+                                ? t("dashboard.weatherRainChanceMedium")
+                                : t("dashboard.weatherRainChanceLow")
+                            : "--"}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {weatherData.daily.map((day) => {
+                        const rainLabel =
+                          typeof day.precipitationProbMax === "number"
+                            ? day.precipitationProbMax >= 70
+                              ? t("dashboard.weatherRainChanceHigh")
+                              : day.precipitationProbMax >= 35
+                                ? t("dashboard.weatherRainChanceMedium")
+                                : t("dashboard.weatherRainChanceLow")
+                            : "--";
+                        return (
+                          <div
+                            key={day.date}
+                            className="flex h-full flex-col gap-2 rounded-xl border border-sky-200/80 bg-gradient-to-br from-white to-sky-50/60 p-2.5 shadow-[0_8px_18px_-14px_rgba(2,105,170,0.45)]"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-slate-800">{day.date}</p>
+                              <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                                {rainLabel}
+                                {typeof day.precipitationProbMax === "number" ? ` (${day.precipitationProbMax}%)` : ""}
+                              </span>
+                            </div>
+
+                            <p className="text-lg font-bold leading-none text-slate-900">
+                              {day.max ?? "--"}° <span className="text-sm font-medium text-slate-500">/ {day.min ?? "--"}°</span>
+                            </p>
+
+                            <div className="flex flex-wrap gap-1.5">
+                              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                                {t("dashboard.weatherUvMax")}: {day.uvMax ?? "--"}
+                              </span>
+                              <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-medium text-cyan-800">
+                                {t("dashboard.humidity")}: {day.humidityAvg ?? "--"}%
+                              </span>
+                              <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-800">
+                                {t("dashboard.weatherRain")}: {day.precipitationSum ?? "--"} mm
+                              </span>
+                              <span className="rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                                {t("dashboard.weatherCloud")}: {day.cloudAvg ?? "--"}%
+                              </span>
+                            </div>
+
+                            <div className="mt-auto flex items-center justify-between text-[11px] text-muted-foreground">
+                              <span className="inline-flex items-center gap-1">
+                                <Sunrise className="h-3.5 w-3.5" />
+                                {day.sunrise ?? "--"}
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <Sunset className="h-3.5 w-3.5" />
+                                {day.sunset ?? "--"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("dashboard.weatherUnavailable")}</p>
+              )}
             </CardContent>
           </Card>
 
@@ -888,6 +1445,7 @@ export default function LoginDashboard() {
             solutionGroups.map((solution) => {
               const sensorDevices = solution.devices.filter((device) => device.device_type.toLowerCase() === "sensors");
               const actuatorDevices = solution.devices.filter((device) => device.device_type.toLowerCase() === "actuators");
+              const isSinchai = isSmartSinchaiSolution(solution.solution_name);
               const otherDevices = solution.devices.filter((device) => {
                 const type = device.device_type.toLowerCase();
                 return type !== "sensors" && type !== "actuators";
@@ -915,7 +1473,24 @@ export default function LoginDashboard() {
                     </div>
                   )}
 
-                  {actuatorDevices.length > 0 && (
+                  {isSinchai && (
+                    <div className="space-y-3">
+                      <div className="grid gap-5">
+                        <div className="w-full">
+                        <SinchaiSummaryCard
+                          mode={sinchaiMode}
+                          schedules={sinchaiSchedules}
+                          fertigationTimeMin={sinchaiFertigationTimeMin}
+                          t={t}
+                          loading={sinchaiLoading}
+                          onOpenPlanner={() => navigate("/dashboard/sinchai-planner")}
+                        />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isSinchai && actuatorDevices.length > 0 && (
                     <div className="space-y-3">
                       <h3 className="text-lg font-semibold text-foreground">{t("dashboard.actuator")}</h3>
                       <div className="grid gap-5 md:grid-cols-2">{actuatorDevices.map((device) => renderDeviceCardForSolution(solution.solution_name, device))}</div>
@@ -957,7 +1532,7 @@ export default function LoginDashboard() {
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle className="font-display text-3xl font-semibold">
-              {selectedGraphDevice?.device_name ?? "Sensor"} Trends
+              {t("dashboard.trendsTitle", { device: selectedGraphDevice?.device_name ?? t("dashboard.sensor") })}
             </DialogTitle>
             <DialogDescription>
               {selectedGraphDevice?.device_id}
@@ -967,32 +1542,32 @@ export default function LoginDashboard() {
 
           <div className="grid gap-3 md:grid-cols-5">
             <div className="rounded-xl border bg-muted/35 p-3">
-              <p className="text-xs text-muted-foreground">Current Temperature</p>
+              <p className="text-xs text-muted-foreground">{t("dashboard.currentTemperature")}</p>
               <p className="text-3xl font-semibold">
                 {latestTemperature ?? "--"}
                 <span className="ml-1 text-lg text-muted-foreground">°C</span>
               </p>
             </div>
             <div className="rounded-xl border bg-muted/35 p-3">
-              <p className="text-xs text-muted-foreground">Current Humidity</p>
+              <p className="text-xs text-muted-foreground">{t("dashboard.currentHumidity")}</p>
               <p className="text-3xl font-semibold">
                 {latestHumidity ?? "--"}
                 <span className="ml-1 text-lg text-muted-foreground">%</span>
               </p>
             </div>
             <div className="rounded-xl border bg-muted/35 p-3">
-              <p className="text-xs text-muted-foreground">Current CO2</p>
+              <p className="text-xs text-muted-foreground">{t("dashboard.currentCo2")}</p>
               <p className="text-3xl font-semibold">
                 {latestCo2 ?? "--"}
                 <span className="ml-1 text-lg text-muted-foreground">ppm</span>
               </p>
             </div>
             <div className="rounded-xl border bg-muted/35 p-3">
-              <p className="text-xs text-muted-foreground">Selected Range</p>
+              <p className="text-xs text-muted-foreground">{t("dashboard.selectedRange")}</p>
               <p className="text-3xl font-semibold">{selectedRange}D</p>
             </div>
             <div className="rounded-xl border bg-muted/35 p-3">
-              <p className="text-xs text-muted-foreground">Data Points</p>
+              <p className="text-xs text-muted-foreground">{t("dashboard.dataPoints")}</p>
               <p className="text-3xl font-semibold">{graphData.length}</p>
             </div>
           </div>
@@ -1028,11 +1603,11 @@ export default function LoginDashboard() {
 
           <div className="h-[360px] rounded-2xl border border-border/70 bg-background p-3">
             {graphLoading ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading graph...</div>
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t("dashboard.graphLoading")}</div>
             ) : graphError ? (
               <div className="flex h-full items-center justify-center text-sm text-destructive">{graphError}</div>
             ) : graphData.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No historical data available.</div>
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t("dashboard.noHistoricalData")}</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={graphData}>
