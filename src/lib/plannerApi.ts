@@ -385,6 +385,7 @@ export type SinchaiSchedule = {
   schedule_no: number;
   schedule_name: string;
   start_time: string;
+  refill_duration_min?: number | null;
   irrigation_duration_min: number | null;
   valves: string[];
   days: string[];
@@ -489,12 +490,14 @@ function normalizeSinchaiSchedules(source: unknown) {
       if (!row) return null;
       const numberValue = asNumberLoose(row.schedule_no ?? row.scheduleNo ?? row.id);
       const scheduleNo = numberValue !== null ? Math.max(1, Math.trunc(numberValue)) : index + 1;
+      const refillDuration = asNumberLoose(row.refill_duration_min ?? row.refillDurationMin ?? row.refill_duration);
       const duration = asNumberLoose(row.irrigation_duration_min ?? row.duration_min ?? row.duration);
       const enabled = asBooleanLoose(row.enabled ?? row.is_enabled ?? row.status) ?? true;
       return {
         schedule_no: scheduleNo,
         schedule_name: asString(row.schedule_name) ?? asString(row.name) ?? `Schedule ${index + 1}`,
         start_time: asString(row.start_time) ?? asString(row.time) ?? "",
+        refill_duration_min: refillDuration !== null ? Math.max(0, Math.trunc(refillDuration)) : null,
         irrigation_duration_min: duration !== null ? Math.max(0, Math.trunc(duration)) : null,
         valves: asStringArray(row.valves ?? row.zones ?? row.lines),
         days: asStringArray(row.days ?? row.repeat_days ?? row.weekdays),

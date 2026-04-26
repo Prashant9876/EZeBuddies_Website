@@ -69,6 +69,7 @@ function normalizeScheduleNumbers(schedules: SinchaiSchedule[]) {
     schedule_no: index + 1,
     schedule_name: schedule.schedule_name?.trim() ? schedule.schedule_name : `Schedule ${index + 1}`,
     nutrition_tanks: schedule.nutrition_tanks ?? {},
+    refill_duration_min: typeof schedule.refill_duration_min === "number" ? schedule.refill_duration_min : null,
     ec_lower_limit: typeof schedule.ec_lower_limit === "number" ? schedule.ec_lower_limit : null,
     ec_upper_limit: typeof schedule.ec_upper_limit === "number" ? schedule.ec_upper_limit : null,
     ph_lower_limit: typeof schedule.ph_lower_limit === "number" ? schedule.ph_lower_limit : null,
@@ -108,23 +109,27 @@ function parseTimeToMinutes(value: string) {
 
 function findOverlappingSchedules(schedules: SinchaiSchedule[], fertigationTimeMin: number | null) {
   const normalized = normalizeScheduleNumbers(schedules);
-  const preWindowBuffer = Math.max(0, Math.trunc(fertigationTimeMin ?? 0)) + 5;
+  const fertigationWindow = Math.max(0, Math.trunc(fertigationTimeMin ?? 0));
+  const preStartBuffer = 5;
+  const postEndBuffer = 10;
 
   for (let i = 0; i < normalized.length; i += 1) {
     const first = normalized[i];
     const firstStart = parseTimeToMinutes(first.start_time);
+    const firstRefillDuration = typeof first.refill_duration_min === "number" ? first.refill_duration_min : null;
     const firstDuration = typeof first.irrigation_duration_min === "number" ? first.irrigation_duration_min : null;
-    if (firstStart === null || !firstDuration || firstDuration <= 0 || first.days.length === 0) continue;
-    const firstWindowStart = Math.max(0, firstStart - preWindowBuffer);
-    const firstWindowEnd = firstStart + firstDuration;
+    if (firstStart === null || !firstDuration || firstDuration <= 0 || !firstRefillDuration || firstRefillDuration <= 0 || first.days.length === 0) continue;
+    const firstWindowStart = Math.max(0, firstStart - preStartBuffer);
+    const firstWindowEnd = firstStart + firstRefillDuration + fertigationWindow + firstDuration + postEndBuffer;
 
     for (let j = i + 1; j < normalized.length; j += 1) {
       const second = normalized[j];
       const secondStart = parseTimeToMinutes(second.start_time);
+      const secondRefillDuration = typeof second.refill_duration_min === "number" ? second.refill_duration_min : null;
       const secondDuration = typeof second.irrigation_duration_min === "number" ? second.irrigation_duration_min : null;
-      if (secondStart === null || !secondDuration || secondDuration <= 0 || second.days.length === 0) continue;
-      const secondWindowStart = Math.max(0, secondStart - preWindowBuffer);
-      const secondWindowEnd = secondStart + secondDuration;
+      if (secondStart === null || !secondDuration || secondDuration <= 0 || !secondRefillDuration || secondRefillDuration <= 0 || second.days.length === 0) continue;
+      const secondWindowStart = Math.max(0, secondStart - preStartBuffer);
+      const secondWindowEnd = secondStart + secondRefillDuration + fertigationWindow + secondDuration + postEndBuffer;
 
       const commonDays = first.days.filter((day) => second.days.includes(day));
       if (commonDays.length === 0) continue;
@@ -205,16 +210,19 @@ function isAutoScheduleRunningNow(schedules: SinchaiSchedule[], fertigationTimeM
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const today = getTodayShortName();
-  const fertigationLead = Math.max(0, Math.trunc(fertigationTimeMin ?? 0));
+  const fertigationWindow = Math.max(0, Math.trunc(fertigationTimeMin ?? 0));
+  const preStartBuffer = 5;
+  const postEndBuffer = 10;
 
   return schedules.some((schedule) => {
     if (!schedule.enabled) return false;
     if (!schedule.days.includes(today)) return false;
     const startMin = parseTimeToMinutes(schedule.start_time);
+    const refillDuration = typeof schedule.refill_duration_min === "number" ? schedule.refill_duration_min : null;
     const duration = schedule.irrigation_duration_min;
-    if (startMin === null || !duration || duration <= 0) return false;
-    const activityStart = Math.max(0, startMin - fertigationLead);
-    const activityEnd = startMin + duration;
+    if (startMin === null || !duration || duration <= 0 || !refillDuration || refillDuration <= 0) return false;
+    const activityStart = Math.max(0, startMin - preStartBuffer);
+    const activityEnd = startMin + refillDuration + fertigationWindow + duration + postEndBuffer;
     return nowMinutes >= activityStart && nowMinutes <= activityEnd;
   });
 }
@@ -239,6 +247,9 @@ function validatePlannerBeforeSave(
     }
     if (!schedule.start_time?.trim()) {
       return `${t("sinchaiPlanner.validationSchedulePrefix")} ${schedule.schedule_no}: ${t("sinchaiPlanner.startTime")}`;
+    }
+    if (schedule.refill_duration_min === null || schedule.refill_duration_min <= 0) {
+      return `${t("sinchaiPlanner.validationSchedulePrefix")} ${schedule.schedule_no}: ${t("sinchaiPlanner.refillDuration")}`;
     }
     if (schedule.irrigation_duration_min === null || schedule.irrigation_duration_min <= 0) {
       return `${t("sinchaiPlanner.validationSchedulePrefix")} ${schedule.schedule_no}: ${t("sinchaiPlanner.duration")}`;
@@ -963,18 +974,18 @@ export default function SinchaiPlanner() {
         </div>
       </div>
 
-      <Card className="border-slate-700/70 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900/80 text-slate-100 shadow-[0_18px_42px_-24px_rgba(4,12,28,0.8)]">
+      <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-lime-50 to-amber-50 text-slate-900 shadow-[0_18px_40px_-24px_rgba(70,140,95,0.35)]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-emerald-200">
+          <CardTitle className="flex items-center gap-2 text-emerald-900">
             <FlaskConical className="h-5 w-5" />
             {t("sinchaiPlanner.fertigationTitle")}
           </CardTitle>
-          <CardDescription className="text-slate-300">{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
+          <CardDescription className="text-slate-600">{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5 [&_input]:bg-white/95 [&_input]:text-slate-900 [&_input]:placeholder:text-slate-500">
+        <CardContent className="space-y-5 [&_input]:border-emerald-200/80 [&_input]:bg-white [&_input]:text-slate-900 [&_input]:placeholder:text-slate-500 [&_input]:shadow-sm">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-slate-200">{t("sinchaiPlanner.fertigationTimeMin")}</Label>
+                <Label className="text-emerald-900">{t("sinchaiPlanner.fertigationTimeMin")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -984,7 +995,7 @@ export default function SinchaiPlanner() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-200">{t("sinchaiPlanner.noOfNutritionTank")}</Label>
+                <Label className="text-emerald-900">{t("sinchaiPlanner.noOfNutritionTank")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -995,8 +1006,8 @@ export default function SinchaiPlanner() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-violet-300/40 bg-violet-950/30 p-4">
-              <p className="mb-3 text-sm font-bold text-violet-900">{t("sinchaiPlanner.ecCalibrationTitle")}</p>
+            <div className="rounded-xl border border-emerald-200/80 bg-white/70 p-4">
+              <p className="mb-3 text-sm font-bold text-emerald-900">{t("sinchaiPlanner.ecCalibrationTitle")}</p>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label className="text-xs text-violet-800">{t("sinchaiPlanner.concentrationSolutionQtyMl")}</Label>
@@ -1044,8 +1055,8 @@ export default function SinchaiPlanner() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-sky-300/40 bg-sky-950/25 p-4">
-              <p className="mb-3 text-sm font-bold text-sky-900">{t("sinchaiPlanner.phCalibrationTitle")}</p>
+            <div className="rounded-xl border border-amber-200/80 bg-white/70 p-4">
+              <p className="mb-3 text-sm font-bold text-amber-900">{t("sinchaiPlanner.phCalibrationTitle")}</p>
               <div className="space-y-4">
                 <div className="rounded-lg border border-sky-200/70 bg-white/80 p-3">
                   <p className="mb-2 text-xs font-bold text-sky-800">{t("sinchaiPlanner.phUpBasicSolution")}</p>
@@ -1424,52 +1435,58 @@ export default function SinchaiPlanner() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <div className="space-y-2">
-                      <Label>{t("sinchaiPlanner.scheduleName")}</Label>
-                      <Input
-                        value={schedule.schedule_name}
-                        onChange={(event) =>
-                          updateSchedule(schedule.schedule_no, (prev) => ({
-                            ...prev,
-                            schedule_name: event.target.value,
-                          }))
-                        }
-                        placeholder={`${t("sinchaiPlanner.schedule")} ${schedule.schedule_no}`}
-                      />
+                  <div className="rounded-2xl border border-cyan-200/90 bg-gradient-to-br from-cyan-50 via-sky-50 to-blue-50 p-4 shadow-[0_12px_28px_-20px_rgba(16,110,200,0.45)]">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-800">{t("sinchaiPlanner.refillSectionTitle")}</p>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label>{t("sinchaiPlanner.scheduleName")}</Label>
+                        <Input
+                          value={schedule.schedule_name}
+                          onChange={(event) =>
+                            updateSchedule(schedule.schedule_no, (prev) => ({
+                              ...prev,
+                              schedule_name: event.target.value,
+                            }))
+                          }
+                          placeholder={`${t("sinchaiPlanner.schedule")} ${schedule.schedule_no}`}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t("sinchaiPlanner.startTime")}</Label>
+                        <Input
+                          type="time"
+                          value={schedule.start_time}
+                          onChange={(event) =>
+                            updateSchedule(schedule.schedule_no, (prev) => ({
+                              ...prev,
+                              start_time: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t("sinchaiPlanner.refillDuration")}</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={schedule.refill_duration_min ?? ""}
+                          onChange={(event) =>
+                            updateSchedule(schedule.schedule_no, (prev) => ({
+                              ...prev,
+                              refill_duration_min: event.target.value ? Number(event.target.value) : null,
+                            }))
+                          }
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>{t("sinchaiPlanner.startTime")}</Label>
-                      <Input
-                        type="time"
-                        value={schedule.start_time}
-                        onChange={(event) =>
-                          updateSchedule(schedule.schedule_no, (prev) => ({
-                            ...prev,
-                            start_time: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t("sinchaiPlanner.duration")}</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={schedule.irrigation_duration_min ?? ""}
-                        onChange={(event) =>
-                          updateSchedule(schedule.schedule_no, (prev) => ({
-                            ...prev,
-                            irrigation_duration_min: event.target.value ? Number(event.target.value) : null,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t("sinchaiPlanner.fertigationStatus")}</Label>
-                      <div className="flex h-10 items-center justify-between rounded-md border border-input px-3">
-                        <span className="text-sm text-slate-700">
-                          {schedule.enabled ? t("sinchaiPlanner.enabled") : t("sinchaiPlanner.disabled")}
+                  </div>
+
+                  <div className="rounded-2xl border border-violet-200/90 bg-gradient-to-br from-violet-50 via-fuchsia-50 to-purple-50 p-4 shadow-[0_12px_28px_-20px_rgba(120,75,210,0.55)]">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-violet-800">{t("sinchaiPlanner.fertigateSectionTitle")}</p>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-violet-300 bg-white/90 px-3 py-1.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-700">
+                          {t("sinchaiPlanner.fertigationStatus")}
                         </span>
                         <Switch
                           checked={schedule.enabled}
@@ -1480,176 +1497,202 @@ export default function SinchaiPlanner() {
                             }))
                           }
                         />
+                        <span className="text-xs font-semibold text-slate-700">
+                          {schedule.enabled ? t("sinchaiPlanner.enabled") : t("sinchaiPlanner.disabled")}
+                        </span>
                       </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-violet-200/80 bg-white/75 p-3 shadow-sm">
+                        <p className="text-sm font-semibold text-violet-800">{t("sinchaiPlanner.ecLimits")}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-xs text-violet-700">{t("sinchaiPlanner.lowerLimit")}</Label>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              value={schedule.ec_lower_limit ?? ""}
+                              onChange={(event) =>
+                                updateSchedule(schedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  ec_lower_limit: parseNullableNumber(event.target.value),
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-violet-700">{t("sinchaiPlanner.upperLimit")}</Label>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              value={schedule.ec_upper_limit ?? ""}
+                              onChange={(event) =>
+                                updateSchedule(schedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  ec_upper_limit: parseNullableNumber(event.target.value),
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-fuchsia-200/80 bg-white/75 p-3 shadow-sm">
+                        <p className="text-sm font-semibold text-fuchsia-800">{t("sinchaiPlanner.phLimits")}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.lowerLimit")}</Label>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              value={schedule.ph_lower_limit ?? ""}
+                              onChange={(event) =>
+                                updateSchedule(schedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  ph_lower_limit: parseNullableNumber(event.target.value),
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.upperLimit")}</Label>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              value={schedule.ph_upper_limit ?? ""}
+                              onChange={(event) =>
+                                updateSchedule(schedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  ph_upper_limit: parseNullableNumber(event.target.value),
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-2 rounded-xl border border-violet-200/80 bg-white/75 p-3 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.06em] text-violet-700">
+                          {t("sinchaiPlanner.nutritionTanks")}
+                        </p>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-violet-300 bg-white text-violet-700 transition hover:bg-violet-100"
+                              aria-label={t("sinchaiPlanner.nutritionTanksInfoLabel")}
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="w-72 border-violet-200 bg-white/95 text-sm text-slate-700">
+                            {t("sinchaiPlanner.nutritionTanksInfo")}
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      {nutritionTankLabels.length > 0 ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {nutritionTankLabels.map((tankLabel) => (
+                            <div key={`${schedule.schedule_no}-nutrition-tank-${tankLabel}`} className="space-y-1">
+                              <Label className="text-xs text-violet-700">
+                                {t("sinchaiPlanner.nutritionTank")} {tankLabel}
+                              </Label>
+                              <Input
+                                value={schedule.nutrition_tanks?.[tankLabel] ?? ""}
+                                placeholder={`${t("sinchaiPlanner.nutritionTank")} ${tankLabel}`}
+                                className="bg-white/90 text-violet-800 placeholder:text-violet-400"
+                                onChange={(event) =>
+                                  updateSchedule(schedule.schedule_no, (prev) => ({
+                                    ...prev,
+                                    nutrition_tanks: {
+                                      ...(prev.nutrition_tanks ?? {}),
+                                      [tankLabel]: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-violet-700/80">{t("sinchaiPlanner.noNutritionTanksHint")}</p>
+                      )}
                     </div>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-3">
-                      <p className="text-sm font-semibold text-violet-800">{t("sinchaiPlanner.ecLimits")}</p>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs text-violet-700">{t("sinchaiPlanner.lowerLimit")}</Label>
+                  <div className="rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-4 shadow-[0_12px_28px_-20px_rgba(14,135,95,0.45)]">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-800">{t("sinchaiPlanner.irrigateSectionTitle")}</p>
+                    <div className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2 md:col-span-1">
+                          <Label>{t("sinchaiPlanner.duration")}</Label>
                           <Input
                             type="number"
-                            step="0.1"
-                            value={schedule.ec_lower_limit ?? ""}
+                            min={1}
+                            value={schedule.irrigation_duration_min ?? ""}
                             onChange={(event) =>
                               updateSchedule(schedule.schedule_no, (prev) => ({
                                 ...prev,
-                                ec_lower_limit: parseNullableNumber(event.target.value),
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-violet-700">{t("sinchaiPlanner.upperLimit")}</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={schedule.ec_upper_limit ?? ""}
-                            onChange={(event) =>
-                              updateSchedule(schedule.schedule_no, (prev) => ({
-                                ...prev,
-                                ec_upper_limit: parseNullableNumber(event.target.value),
+                                irrigation_duration_min: event.target.value ? Number(event.target.value) : null,
                               }))
                             }
                           />
                         </div>
                       </div>
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-violet-700">
-                            {t("sinchaiPlanner.nutritionTanks")}
-                          </p>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-violet-300 bg-white text-violet-700 transition hover:bg-violet-100"
-                                aria-label={t("sinchaiPlanner.nutritionTanksInfoLabel")}
+
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.selectValves")}</p>
+                        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                          {valveOptions.map((valve) => {
+                            const checked = schedule.valves.includes(valve);
+                            return (
+                              <label
+                                key={`${schedule.schedule_no}-${valve}`}
+                                className="flex items-center gap-2 rounded-md border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm"
                               >
-                                <Info className="h-3.5 w-3.5" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="w-72 border-violet-200 bg-white/95 text-sm text-slate-700">
-                              {t("sinchaiPlanner.nutritionTanksInfo")}
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        {nutritionTankLabels.length > 0 ? (
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {nutritionTankLabels.map((tankLabel) => (
-                              <div key={`${schedule.schedule_no}-nutrition-tank-${tankLabel}`} className="space-y-1">
-                                <Label className="text-xs text-violet-700">
-                                  {t("sinchaiPlanner.nutritionTank")} {tankLabel}
-                                </Label>
-                                <Input
-                                  value={schedule.nutrition_tanks?.[tankLabel] ?? ""}
-                                  placeholder={`${t("sinchaiPlanner.nutritionTank")} ${tankLabel}`}
-                                  className="bg-white/80 text-violet-800 placeholder:text-violet-400"
-                                  onChange={(event) =>
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(state) =>
                                     updateSchedule(schedule.schedule_no, (prev) => ({
                                       ...prev,
-                                      nutrition_tanks: {
-                                        ...(prev.nutrition_tanks ?? {}),
-                                        [tankLabel]: event.target.value,
-                                      },
+                                      valves: toggleListValue(prev.valves, valve, state === true, valveOptions),
                                     }))
                                   }
                                 />
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-violet-700/80">{t("sinchaiPlanner.noNutritionTanksHint")}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50/70 p-3">
-                      <p className="text-sm font-semibold text-fuchsia-800">{t("sinchaiPlanner.phLimits")}</p>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.lowerLimit")}</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={schedule.ph_lower_limit ?? ""}
-                            onChange={(event) =>
-                              updateSchedule(schedule.schedule_no, (prev) => ({
-                                ...prev,
-                                ph_lower_limit: parseNullableNumber(event.target.value),
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.upperLimit")}</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={schedule.ph_upper_limit ?? ""}
-                            onChange={(event) =>
-                              updateSchedule(schedule.schedule_no, (prev) => ({
-                                ...prev,
-                                ph_upper_limit: parseNullableNumber(event.target.value),
-                              }))
-                            }
-                          />
+                                <span>{valve}</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.selectValves")}</p>
-                    <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                      {valveOptions.map((valve) => {
-                        const checked = schedule.valves.includes(valve);
-                        return (
-                          <label
-                            key={`${schedule.schedule_no}-${valve}`}
-                            className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(state) =>
-                                updateSchedule(schedule.schedule_no, (prev) => ({
-                                  ...prev,
-                                  valves: toggleListValue(prev.valves, valve, state === true, valveOptions),
-                                }))
-                              }
-                            />
-                            <span>{valve}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.repeatDays")}</p>
-                    <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                      {sinchaiDayOptions.map((day) => {
-                        const checked = schedule.days.includes(day);
-                        return (
-                          <label
-                            key={`${schedule.schedule_no}-${day}`}
-                            className="flex items-center gap-2 rounded-md border border-cyan-200 bg-cyan-50/60 px-3 py-2 text-sm"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(state) =>
-                                updateSchedule(schedule.schedule_no, (prev) => ({
-                                  ...prev,
-                                  days: toggleListValue(prev.days, day, state === true, sinchaiDayOptions),
-                                }))
-                              }
-                            />
-                            <span>{day}</span>
-                          </label>
-                        );
-                      })}
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.repeatDays")}</p>
+                        <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                          {sinchaiDayOptions.map((day) => {
+                            const checked = schedule.days.includes(day);
+                            return (
+                              <label
+                                key={`${schedule.schedule_no}-${day}`}
+                                className="flex items-center gap-2 rounded-md border border-emerald-200 bg-white/90 px-3 py-2 text-sm shadow-sm"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(state) =>
+                                    updateSchedule(schedule.schedule_no, (prev) => ({
+                                      ...prev,
+                                      days: toggleListValue(prev.days, day, state === true, sinchaiDayOptions),
+                                    }))
+                                  }
+                                />
+                                <span>{day}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
