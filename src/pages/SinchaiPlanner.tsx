@@ -70,6 +70,8 @@ function normalizeScheduleNumbers(schedules: SinchaiSchedule[]) {
     schedule_name: schedule.schedule_name?.trim() ? schedule.schedule_name : `Schedule ${index + 1}`,
     nutrition_tanks: schedule.nutrition_tanks ?? {},
     refill_duration_min: typeof schedule.refill_duration_min === "number" ? schedule.refill_duration_min : null,
+    fertigation_enabled: typeof schedule.fertigation_enabled === "boolean" ? schedule.fertigation_enabled : schedule.enabled ?? true,
+    refill_enabled: typeof schedule.refill_enabled === "boolean" ? schedule.refill_enabled : true,
     ec_lower_limit: typeof schedule.ec_lower_limit === "number" ? schedule.ec_lower_limit : null,
     ec_upper_limit: typeof schedule.ec_upper_limit === "number" ? schedule.ec_upper_limit : null,
     ph_lower_limit: typeof schedule.ph_lower_limit === "number" ? schedule.ph_lower_limit : null,
@@ -215,7 +217,7 @@ function isAutoScheduleRunningNow(schedules: SinchaiSchedule[], fertigationTimeM
   const postEndBuffer = 10;
 
   return schedules.some((schedule) => {
-    if (!schedule.enabled) return false;
+    if (!(schedule.fertigation_enabled ?? schedule.enabled)) return false;
     if (!schedule.days.includes(today)) return false;
     const startMin = parseTimeToMinutes(schedule.start_time);
     const refillDuration = typeof schedule.refill_duration_min === "number" ? schedule.refill_duration_min : null;
@@ -824,7 +826,8 @@ export default function SinchaiPlanner() {
     }
     const nutritionTankPayload: Record<string, number> = {};
     for (const label of nutritionTankLabels) {
-      const numericValue = parseNullableNumber(manualFertigationNutritionTanks[label] ?? "");
+      const rawValue = manualFertigationNutritionTanks[label];
+      const numericValue = parseNullableNumber(rawValue ?? "");
       if (numericValue === null) {
         setValidationError(t("sinchaiPlanner.manualFertigationValidationTankNumeric", { tank: label }));
         return;
@@ -1435,13 +1438,36 @@ export default function SinchaiPlanner() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="rounded-2xl border border-cyan-200/90 bg-gradient-to-br from-cyan-50 via-sky-50 to-blue-50 p-4 shadow-[0_12px_28px_-20px_rgba(16,110,200,0.45)]">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-800">{t("sinchaiPlanner.refillSectionTitle")}</p>
+                  <div
+                    className={`rounded-2xl border border-cyan-200/90 bg-gradient-to-br from-cyan-50 via-sky-50 to-blue-50 p-4 shadow-[0_12px_28px_-20px_rgba(16,110,200,0.45)] transition-all duration-300 ${
+                      schedule.refill_enabled ?? true ? "opacity-100" : "opacity-75"
+                    }`}
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-cyan-800">
+                        {t("sinchaiPlanner.refillSectionTitle")}
+                      </p>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300 bg-white/90 px-3 py-1.5 shadow-sm">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-700">
+                          {t("sinchaiPlanner.refillSectionTitle")}
+                        </span>
+                        <Switch
+                          checked={schedule.refill_enabled ?? true}
+                          onCheckedChange={(checked) =>
+                            updateSchedule(schedule.schedule_no, (prev) => ({
+                              ...prev,
+                              refill_enabled: checked,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
                     <div className="grid gap-4 md:grid-cols-3">
                       <div className="space-y-2">
                         <Label>{t("sinchaiPlanner.scheduleName")}</Label>
                         <Input
                           value={schedule.schedule_name}
+                          disabled={!(schedule.refill_enabled ?? true)}
                           onChange={(event) =>
                             updateSchedule(schedule.schedule_no, (prev) => ({
                               ...prev,
@@ -1456,6 +1482,7 @@ export default function SinchaiPlanner() {
                         <Input
                           type="time"
                           value={schedule.start_time}
+                          disabled={!(schedule.refill_enabled ?? true)}
                           onChange={(event) =>
                             updateSchedule(schedule.schedule_no, (prev) => ({
                               ...prev,
@@ -1470,6 +1497,7 @@ export default function SinchaiPlanner() {
                           type="number"
                           min={1}
                           value={schedule.refill_duration_min ?? ""}
+                          disabled={!(schedule.refill_enabled ?? true)}
                           onChange={(event) =>
                             updateSchedule(schedule.schedule_no, (prev) => ({
                               ...prev,
@@ -1483,22 +1511,23 @@ export default function SinchaiPlanner() {
 
                   <div className="rounded-2xl border border-violet-200/90 bg-gradient-to-br from-violet-50 via-fuchsia-50 to-purple-50 p-4 shadow-[0_12px_28px_-20px_rgba(120,75,210,0.55)]">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-violet-800">{t("sinchaiPlanner.fertigateSectionTitle")}</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-violet-800">{t("sinchaiPlanner.fertigateSectionTitle")}</p>
                       <div className="inline-flex items-center gap-2 rounded-full border border-violet-300 bg-white/90 px-3 py-1.5">
                         <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-700">
                           {t("sinchaiPlanner.fertigationStatus")}
                         </span>
                         <Switch
-                          checked={schedule.enabled}
+                          checked={schedule.fertigation_enabled ?? schedule.enabled}
                           onCheckedChange={(checked) =>
                             updateSchedule(schedule.schedule_no, (prev) => ({
                               ...prev,
                               enabled: checked,
+                              fertigation_enabled: checked,
                             }))
                           }
                         />
                         <span className="text-xs font-semibold text-slate-700">
-                          {schedule.enabled ? t("sinchaiPlanner.enabled") : t("sinchaiPlanner.disabled")}
+                          {(schedule.fertigation_enabled ?? schedule.enabled) ? t("sinchaiPlanner.enabled") : t("sinchaiPlanner.disabled")}
                         </span>
                       </div>
                     </div>

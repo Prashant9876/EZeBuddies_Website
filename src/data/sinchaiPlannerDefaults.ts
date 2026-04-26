@@ -16,6 +16,8 @@ export function buildDefaultSinchaiSchedule(scheduleNo: number) {
     valves: [sinchaiValveOptions[0]],
     days: ["Mon", "Wed", "Fri"] as SinchaiDay[],
     enabled: true,
+    fertigation_enabled: true,
+    refill_enabled: true,
     nutrition_tanks: {},
     ec_lower_limit: null,
     ec_upper_limit: null,

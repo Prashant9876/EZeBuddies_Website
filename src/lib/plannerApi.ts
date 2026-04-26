@@ -390,6 +390,8 @@ export type SinchaiSchedule = {
   valves: string[];
   days: string[];
   enabled: boolean;
+  fertigation_enabled?: boolean;
+  refill_enabled?: boolean;
   nutrition_tanks?: Record<string, string>;
   ec_lower_limit?: number | null;
   ec_upper_limit?: number | null;
@@ -492,7 +494,9 @@ function normalizeSinchaiSchedules(source: unknown) {
       const scheduleNo = numberValue !== null ? Math.max(1, Math.trunc(numberValue)) : index + 1;
       const refillDuration = asNumberLoose(row.refill_duration_min ?? row.refillDurationMin ?? row.refill_duration);
       const duration = asNumberLoose(row.irrigation_duration_min ?? row.duration_min ?? row.duration);
-      const enabled = asBooleanLoose(row.enabled ?? row.is_enabled ?? row.status) ?? true;
+      const fertigationEnabled =
+        asBooleanLoose(row.fertigation_enabled ?? row.fertigationEnabled ?? row.enabled ?? row.is_enabled ?? row.status) ?? true;
+      const refillEnabled = asBooleanLoose(row.refill_enabled ?? row.refillEnabled) ?? true;
       return {
         schedule_no: scheduleNo,
         schedule_name: asString(row.schedule_name) ?? asString(row.name) ?? `Schedule ${index + 1}`,
@@ -501,7 +505,9 @@ function normalizeSinchaiSchedules(source: unknown) {
         irrigation_duration_min: duration !== null ? Math.max(0, Math.trunc(duration)) : null,
         valves: asStringArray(row.valves ?? row.zones ?? row.lines),
         days: asStringArray(row.days ?? row.repeat_days ?? row.weekdays),
-        enabled,
+        enabled: fertigationEnabled,
+        fertigation_enabled: fertigationEnabled,
+        refill_enabled: refillEnabled,
         nutrition_tanks: asStringMap(row.nutrition_tanks ?? row.nutritionTanks),
         ec_lower_limit: asNumberLoose(row.ec_lower_limit ?? row.ecLowerLimit ?? row.ec_min ?? row.ecMin),
         ec_upper_limit: asNumberLoose(row.ec_upper_limit ?? row.ecUpperLimit ?? row.ec_max ?? row.ecMax),
