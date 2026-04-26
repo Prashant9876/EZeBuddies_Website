@@ -130,6 +130,44 @@ export async function startManualFertigation(args: {
   });
 }
 
+export async function updateFertigationSettings(args: {
+  apiBase: string;
+  token: string;
+  userId: string;
+  fertigationTimeMin: number | null;
+  noOfNutritionTank: number | null;
+  ecCalibrationPoint: {
+    concentration_solution_liquid_quantity_ml: number | null;
+    ro_water_liter: number | null;
+    ec_increased_by: number | null;
+  };
+  phCalibrationPoint: {
+    ph_up_basic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_increased_by: number | null;
+    };
+    ph_down_acidic_solution: {
+      concentration_solution_liquid_quantity_ml: number | null;
+      ro_water_liter: number | null;
+      ph_decreased_by: number | null;
+    };
+  };
+}) {
+  const explicit = import.meta.env.VITE_FERTIGATION_SETTINGS_UPDATE_API_URL?.trim();
+  const url = explicit
+    ? explicit
+    : `${args.apiBase.replace(/\/$/, "")}/update_fertigation_setting`;
+
+  return postJson(url, args.token, {
+    user_id: args.userId,
+    fertigation_time_min: args.fertigationTimeMin,
+    no_of_nutrition_tank: args.noOfNutritionTank,
+    ec_calibration_point: args.ecCalibrationPoint,
+    ph_calibration_point: args.phCalibrationPoint,
+  });
+}
+
 export async function fetchHistoricalData(args: {
   apiBase: string;
   token: string;

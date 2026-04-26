@@ -13,8 +13,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useToast } from "@/hooks/use-toast";
 import { getStoredAuthToken, getStoredLoginResponse } from "@/lib/auth";
 import { applySeo } from "@/lib/seo";
-import { fetchSinchaiPlanner, saveSinchaiPlanner, type SinchaiSchedule } from "@/lib/plannerApi";
-import { resetManualLog, startManualFertigation, startManualIrrigation, triggerEStop } from "@/lib/dashboardControlApi";
+import { fetchSinchaiPlanner, saveSinchaiPlanner, updateSinchaiPlannerMode, type SinchaiSchedule } from "@/lib/plannerApi";
+import {
+  resetManualLog,
+  startManualFertigation,
+  startManualIrrigation,
+  triggerEStop,
+  updateFertigationSettings,
+} from "@/lib/dashboardControlApi";
 import { buildDefaultSinchaiSchedule, sinchaiDayOptions, sinchaiValveOptions } from "@/data/sinchaiPlannerDefaults";
 import { useLanguage } from "@/lib/language";
 
@@ -69,6 +75,9 @@ function normalizeScheduleNumbers(schedules: SinchaiSchedule[]) {
     schedule_no: index + 1,
     schedule_name: schedule.schedule_name?.trim() ? schedule.schedule_name : `Schedule ${index + 1}`,
     nutrition_tanks: schedule.nutrition_tanks ?? {},
+    refill_duration_min: typeof schedule.refill_duration_min === "number" ? schedule.refill_duration_min : null,
+    fertigation_enabled: typeof schedule.fertigation_enabled === "boolean" ? schedule.fertigation_enabled : schedule.enabled ?? true,
+    refill_enabled: typeof schedule.refill_enabled === "boolean" ? schedule.refill_enabled : true,
     ec_lower_limit: typeof schedule.ec_lower_limit === "number" ? schedule.ec_lower_limit : null,
     ec_upper_limit: typeof schedule.ec_upper_limit === "number" ? schedule.ec_upper_limit : null,
     ph_lower_limit: typeof schedule.ph_lower_limit === "number" ? schedule.ph_lower_limit : null,
@@ -108,23 +117,27 @@ function parseTimeToMinutes(value: string) {
 
 function findOverlappingSchedules(schedules: SinchaiSchedule[], fertigationTimeMin: number | null) {
   const normalized = normalizeScheduleNumbers(schedules);
-  const preWindowBuffer = Math.max(0, Math.trunc(fertigationTimeMin ?? 0)) + 5;
+  const fertigationWindow = Math.max(0, Math.trunc(fertigationTimeMin ?? 0));
+  const preStartBuffer = 5;
+  const postEndBuffer = 10;
 
   for (let i = 0; i < normalized.length; i += 1) {
     const first = normalized[i];
     const firstStart = parseTimeToMinutes(first.start_time);
+    const firstRefillDuration = typeof first.refill_duration_min === "number" ? first.refill_duration_min : null;
     const firstDuration = typeof first.irrigation_duration_min === "number" ? first.irrigation_duration_min : null;
-    if (firstStart === null || !firstDuration || firstDuration <= 0 || first.days.length === 0) continue;
-    const firstWindowStart = Math.max(0, firstStart - preWindowBuffer);
-    const firstWindowEnd = firstStart + firstDuration;
+    if (firstStart === null || !firstDuration || firstDuration <= 0 || !firstRefillDuration || firstRefillDuration <= 0 || first.days.length === 0) continue;
+    const firstWindowStart = Math.max(0, firstStart - preStartBuffer);
+    const firstWindowEnd = firstStart + firstRefillDuration + fertigationWindow + firstDuration + postEndBuffer;
 
     for (let j = i + 1; j < normalized.length; j += 1) {
       const second = normalized[j];
       const secondStart = parseTimeToMinutes(second.start_time);
+      const secondRefillDuration = typeof second.refill_duration_min === "number" ? second.refill_duration_min : null;
       const secondDuration = typeof second.irrigation_duration_min === "number" ? second.irrigation_duration_min : null;
-      if (secondStart === null || !secondDuration || secondDuration <= 0 || second.days.length === 0) continue;
-      const secondWindowStart = Math.max(0, secondStart - preWindowBuffer);
-      const secondWindowEnd = secondStart + secondDuration;
+      if (secondStart === null || !secondDuration || secondDuration <= 0 || !secondRefillDuration || secondRefillDuration <= 0 || second.days.length === 0) continue;
+      const secondWindowStart = Math.max(0, secondStart - preStartBuffer);
+      const secondWindowEnd = secondStart + secondRefillDuration + fertigationWindow + secondDuration + postEndBuffer;
 
       const commonDays = first.days.filter((day) => second.days.includes(day));
       if (commonDays.length === 0) continue;
@@ -142,21 +155,24 @@ function findOverlappingSchedules(schedules: SinchaiSchedule[], fertigationTimeM
   return null;
 }
 
-function getPlannerSnapshot(
-  mode: PlannerMode,
+function getPlannerSnapshot(noOfValves: number, schedules: SinchaiSchedule[]) {
+  return JSON.stringify({
+    no_of_valves: noOfValves,
+    schedules: normalizeScheduleNumbers(schedules),
+  });
+}
+
+function getFertigationSnapshot(
   fertigationTimeMin: number | null,
   noOfNutritionTank: number | null,
   ecCalibrationPoint: EcCalibrationPoint,
   phCalibrationPoint: PhCalibrationPoint,
-  schedules: SinchaiSchedule[],
 ) {
   return JSON.stringify({
-    mode,
     fertigation_time_min: fertigationTimeMin,
     no_of_nutrition_tank: noOfNutritionTank,
     ec_calibration_point: ecCalibrationPoint,
     ph_calibration_point: phCalibrationPoint,
-    schedules: normalizeScheduleNumbers(schedules),
   });
 }
 
@@ -196,6 +212,24 @@ function getFertigationEndTime(timestamp: string, fertigationTimeMin: number) {
   return start.getTime() + Math.max(0, fertigationTimeMin) * 60 * 1000;
 }
 
+function getManualLogEndTime(timestamp: string, durationMin: number) {
+  const start = new Date(timestamp);
+  if (Number.isNaN(start.getTime())) return null;
+  return start.getTime() + Math.max(0, durationMin) * 60 * 1000;
+}
+
+function formatRemainingMs(remainingMs: number) {
+  if (remainingMs <= 0) return "00:00";
+  const totalSeconds = Math.ceil(remainingMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 function getTodayShortName() {
   const shortDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
   return shortDays[new Date().getDay()];
@@ -205,16 +239,19 @@ function isAutoScheduleRunningNow(schedules: SinchaiSchedule[], fertigationTimeM
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const today = getTodayShortName();
-  const fertigationLead = Math.max(0, Math.trunc(fertigationTimeMin ?? 0));
+  const fertigationWindow = Math.max(0, Math.trunc(fertigationTimeMin ?? 0));
+  const preStartBuffer = 5;
+  const postEndBuffer = 10;
 
   return schedules.some((schedule) => {
-    if (!schedule.enabled) return false;
+    if (!(schedule.fertigation_enabled ?? schedule.enabled)) return false;
     if (!schedule.days.includes(today)) return false;
     const startMin = parseTimeToMinutes(schedule.start_time);
+    const refillDuration = typeof schedule.refill_duration_min === "number" ? schedule.refill_duration_min : null;
     const duration = schedule.irrigation_duration_min;
-    if (startMin === null || !duration || duration <= 0) return false;
-    const activityStart = Math.max(0, startMin - fertigationLead);
-    const activityEnd = startMin + duration;
+    if (startMin === null || !duration || duration <= 0 || !refillDuration || refillDuration <= 0) return false;
+    const activityStart = Math.max(0, startMin - preStartBuffer);
+    const activityEnd = startMin + refillDuration + fertigationWindow + duration + postEndBuffer;
     return nowMinutes >= activityStart && nowMinutes <= activityEnd;
   });
 }
@@ -239,6 +276,9 @@ function validatePlannerBeforeSave(
     }
     if (!schedule.start_time?.trim()) {
       return `${t("sinchaiPlanner.validationSchedulePrefix")} ${schedule.schedule_no}: ${t("sinchaiPlanner.startTime")}`;
+    }
+    if (schedule.refill_duration_min === null || schedule.refill_duration_min <= 0) {
+      return `${t("sinchaiPlanner.validationSchedulePrefix")} ${schedule.schedule_no}: ${t("sinchaiPlanner.refillDuration")}`;
     }
     if (schedule.irrigation_duration_min === null || schedule.irrigation_duration_min <= 0) {
       return `${t("sinchaiPlanner.validationSchedulePrefix")} ${schedule.schedule_no}: ${t("sinchaiPlanner.duration")}`;
@@ -296,6 +336,7 @@ export default function SinchaiPlanner() {
 
   const [mode, setMode] = useState<PlannerMode>("Auto");
   const [schedules, setSchedules] = useState<SinchaiSchedule[]>([buildDefaultSinchaiSchedule(1)]);
+  const [selectedScheduleNo, setSelectedScheduleNo] = useState<number>(1);
   const [noOfValves, setNoOfValves] = useState<number>(sinchaiValveOptions.length);
   const [fertigationTimeMin, setFertigationTimeMin] = useState<number | null>(null);
   const [noOfNutritionTank, setNoOfNutritionTank] = useState<number | null>(2);
@@ -322,6 +363,8 @@ export default function SinchaiPlanner() {
   const [manualDurationMin, setManualDurationMin] = useState<number | null>(null);
   const [manualSelectedValves, setManualSelectedValves] = useState<string[]>([]);
   const [manualRunning, setManualRunning] = useState(false);
+  const [manualRunningEndsAt, setManualRunningEndsAt] = useState<number | null>(null);
+  const [manualRunningCountdownSec, setManualRunningCountdownSec] = useState<number>(0);
   const [manualFertigationEcLower, setManualFertigationEcLower] = useState<number | null>(null);
   const [manualFertigationEcUpper, setManualFertigationEcUpper] = useState<number | null>(null);
   const [manualFertigationPhLower, setManualFertigationPhLower] = useState<number | null>(null);
@@ -333,13 +376,17 @@ export default function SinchaiPlanner() {
   const [isManualFertigationStartSubmitting, setIsManualFertigationStartSubmitting] = useState(false);
   const [isManualStartSubmitting, setIsManualStartSubmitting] = useState(false);
   const [isManualStopSubmitting, setIsManualStopSubmitting] = useState(false);
+  const [isModeUpdating, setIsModeUpdating] = useState(false);
   const [savedMode, setSavedMode] = useState<PlannerMode>("Auto");
   const [pendingModeAfterEStop, setPendingModeAfterEStop] = useState<PlannerMode | null>(null);
   const [isModeSwitchEStopDialogOpen, setIsModeSwitchEStopDialogOpen] = useState(false);
   const [isModeSwitchEStopSubmitting, setIsModeSwitchEStopSubmitting] = useState(false);
+  const [isManualModeBlockDialogOpen, setIsManualModeBlockDialogOpen] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState(
-    getPlannerSnapshot(
-      "Auto",
+    getPlannerSnapshot(sinchaiValveOptions.length, [buildDefaultSinchaiSchedule(1)]),
+  );
+  const [initialFertigationSnapshot, setInitialFertigationSnapshot] = useState(
+    getFertigationSnapshot(
       null,
       2,
       { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ec_increased_by: null },
@@ -347,7 +394,6 @@ export default function SinchaiPlanner() {
         ph_up_basic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_increased_by: null },
         ph_down_acidic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_decreased_by: null },
       },
-      [buildDefaultSinchaiSchedule(1)],
     ),
   );
   const controlApiBase = useMemo(
@@ -356,8 +402,16 @@ export default function SinchaiPlanner() {
   );
 
   const isDirty = useMemo(
-    () => getPlannerSnapshot(mode, fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint, schedules) !== initialSnapshot,
-    [mode, fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint, schedules, initialSnapshot],
+    () => getPlannerSnapshot(noOfValves, schedules) !== initialSnapshot,
+    [noOfValves, schedules, initialSnapshot],
+  );
+  const isModeDirty = useMemo(
+    () => mode !== savedMode,
+    [mode, savedMode],
+  );
+  const isFertigationDirty = useMemo(
+    () => getFertigationSnapshot(fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint) !== initialFertigationSnapshot,
+    [fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint, initialFertigationSnapshot],
   );
   const valveOptions = useMemo(() => {
     const baseCount = Math.max(1, Math.trunc(noOfValves));
@@ -377,6 +431,44 @@ export default function SinchaiPlanner() {
     [mode, schedules, fertigationTimeMin],
   );
   const manualControlsLocked = mode === "Manual" && savedMode !== "Manual";
+  const selectedSchedule = useMemo(
+    () => schedules.find((schedule) => schedule.schedule_no === selectedScheduleNo) ?? schedules[0] ?? null,
+    [schedules, selectedScheduleNo],
+  );
+
+  useEffect(() => {
+    if (schedules.length === 0) {
+      setSelectedScheduleNo(1);
+      return;
+    }
+    if (!schedules.some((schedule) => schedule.schedule_no === selectedScheduleNo)) {
+      setSelectedScheduleNo(schedules[0].schedule_no);
+    }
+  }, [schedules, selectedScheduleNo]);
+
+  useEffect(() => {
+    if (!manualRunning || !manualRunningEndsAt) {
+      setManualRunningCountdownSec(0);
+      return;
+    }
+    const update = () => {
+      const remainingMs = manualRunningEndsAt - Date.now();
+      if (remainingMs <= 0) {
+        setManualRunning(false);
+        setManualRunningEndsAt(null);
+        setManualRunningCountdownSec(0);
+        toast({
+          title: t("sinchaiPlanner.manualCompletedTitle"),
+          description: t("sinchaiPlanner.manualCompletedDescription"),
+        });
+        return;
+      }
+      setManualRunningCountdownSec(Math.ceil(remainingMs / 1000));
+    };
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
+  }, [manualRunning, manualRunningEndsAt, toast, t]);
 
   useEffect(() => {
     if (!manualFertigationRunning || !manualFertigationEndsAt) {
@@ -491,6 +583,10 @@ export default function SinchaiPlanner() {
           manualLog?.timestamp && typeof manualLog.duration_min === "number"
             ? isManualLogRunning(manualLog.timestamp, manualLog.duration_min)
             : false;
+        const manualEndTime =
+          manualLog?.timestamp && typeof manualLog.duration_min === "number"
+            ? getManualLogEndTime(manualLog.timestamp, manualLog.duration_min)
+            : null;
         const manualFertigationEndTime =
           manualFertigationLog?.timestamp && typeof loadedFertigationTime === "number" && loadedFertigationTime > 0
             ? getFertigationEndTime(manualFertigationLog.timestamp, loadedFertigationTime)
@@ -501,6 +597,7 @@ export default function SinchaiPlanner() {
         setMode(loadedMode);
         setSavedMode(loadedMode);
         setSchedules(loadedSchedules);
+        setSelectedScheduleNo(loadedSchedules[0]?.schedule_no ?? 1);
         setNoOfValves(loadedNoOfValves);
         setFertigationTimeMin(loadedFertigationTime);
         setNoOfNutritionTank(loadedNoOfNutritionTank);
@@ -511,6 +608,10 @@ export default function SinchaiPlanner() {
           setManualSelectedValves(Array.isArray(manualLog.valves) ? manualLog.valves : []);
         }
         setManualRunning(manualRunningFromApi);
+        setManualRunningEndsAt(manualRunningFromApi ? manualEndTime : null);
+        setManualRunningCountdownSec(
+          manualRunningFromApi && manualEndTime ? Math.max(0, Math.ceil((manualEndTime - Date.now()) / 1000)) : 0,
+        );
         if (loadedMode === "Manual" && manualFertigationLog) {
           setManualFertigationEcLower(
             typeof manualFertigationLog.eC?.LL === "number" ? manualFertigationLog.eC.LL : null,
@@ -539,15 +640,9 @@ export default function SinchaiPlanner() {
             ? Math.max(0, Math.ceil((manualFertigationEndTime - Date.now()) / 1000))
             : 0,
         );
-        setInitialSnapshot(
-          getPlannerSnapshot(
-            loadedMode,
-            loadedFertigationTime,
-            loadedNoOfNutritionTank,
-            loadedEcCalibrationPoint,
-            loadedPhCalibrationPoint,
-            loadedSchedules,
-          ),
+        setInitialSnapshot(getPlannerSnapshot(loadedNoOfValves, loadedSchedules));
+        setInitialFertigationSnapshot(
+          getFertigationSnapshot(loadedFertigationTime, loadedNoOfNutritionTank, loadedEcCalibrationPoint, loadedPhCalibrationPoint),
         );
       } catch (error) {
         console.error("Sinchai planner load failed:", error);
@@ -556,6 +651,7 @@ export default function SinchaiPlanner() {
         setMode("Auto");
         setSavedMode("Auto");
         setSchedules(fallback);
+        setSelectedScheduleNo(fallback[0]?.schedule_no ?? 1);
         setNoOfValves(sinchaiValveOptions.length);
         setFertigationTimeMin(null);
         setNoOfNutritionTank(2);
@@ -567,6 +663,8 @@ export default function SinchaiPlanner() {
         setManualDurationMin(null);
         setManualSelectedValves([]);
         setManualRunning(false);
+        setManualRunningEndsAt(null);
+        setManualRunningCountdownSec(0);
         setManualFertigationEcLower(null);
         setManualFertigationEcUpper(null);
         setManualFertigationPhLower(null);
@@ -575,9 +673,9 @@ export default function SinchaiPlanner() {
         setManualFertigationRunning(false);
         setManualFertigationEndsAt(null);
         setManualFertigationCountdownSec(0);
-        setInitialSnapshot(
-          getPlannerSnapshot(
-            "Auto",
+        setInitialSnapshot(getPlannerSnapshot(sinchaiValveOptions.length, fallback));
+        setInitialFertigationSnapshot(
+          getFertigationSnapshot(
             null,
             2,
             { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ec_increased_by: null },
@@ -585,7 +683,6 @@ export default function SinchaiPlanner() {
               ph_up_basic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_increased_by: null },
               ph_down_acidic_solution: { concentration_solution_liquid_quantity_ml: null, ro_water_liter: null, ph_decreased_by: null },
             },
-            fallback,
           ),
         );
       } finally {
@@ -613,13 +710,22 @@ export default function SinchaiPlanner() {
   };
 
   const addSchedule = () => {
-    setSchedules((prev) => normalizeScheduleNumbers([...prev, buildDefaultSinchaiSchedule(prev.length + 1)]));
+    setSchedules((prev) => {
+      const next = normalizeScheduleNumbers([...prev, buildDefaultSinchaiSchedule(prev.length + 1)]);
+      setSelectedScheduleNo(next[next.length - 1]?.schedule_no ?? next[0]?.schedule_no ?? 1);
+      return next;
+    });
   };
 
   const deleteSchedule = (scheduleNo: number) => {
     setSchedules((prev) => {
       const next = prev.filter((schedule) => schedule.schedule_no !== scheduleNo);
-      return normalizeScheduleNumbers(next.length > 0 ? next : [buildDefaultSinchaiSchedule(1)]);
+      const normalized = normalizeScheduleNumbers(next.length > 0 ? next : [buildDefaultSinchaiSchedule(1)]);
+      setSelectedScheduleNo((current) => {
+        if (normalized.some((schedule) => schedule.schedule_no === current)) return current;
+        return normalized[0]?.schedule_no ?? 1;
+      });
+      return normalized;
     });
   };
 
@@ -650,8 +756,47 @@ export default function SinchaiPlanner() {
       await saveSinchaiPlanner({
         token,
         userId,
-        mode,
         noOfValves,
+        schedules: normalized,
+      });
+      setSchedules(normalized);
+      setInitialSnapshot(getPlannerSnapshot(noOfValves, normalized));
+      toast({
+        title: t("sinchaiPlanner.savedTitle"),
+        description: t("sinchaiPlanner.savedDescription"),
+      });
+    } catch (error) {
+      console.error("Sinchai planner save failed:", error);
+      toast({
+        title: t("sinchaiPlanner.saveFailedTitle"),
+        description: t("sinchaiPlanner.saveFailedDescription"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFertigationApplyChanges = async () => {
+    if (!token || !userId || !controlApiBase) {
+      setValidationError(t("dashboard.estopConfigMissingDescription"));
+      return;
+    }
+    if (fertigationTimeMin === null || fertigationTimeMin <= 0) {
+      setValidationError(t("sinchaiPlanner.validationFertigation"));
+      return;
+    }
+    if (noOfNutritionTank === null || noOfNutritionTank < 0) {
+      setValidationError(t("sinchaiPlanner.validationNutritionTankCount"));
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await updateFertigationSettings({
+        apiBase: controlApiBase,
+        token,
+        userId,
         fertigationTimeMin,
         noOfNutritionTank,
         ecCalibrationPoint: {
@@ -671,24 +816,45 @@ export default function SinchaiPlanner() {
             ph_decreased_by: phCalibrationPoint.ph_down_acidic_solution.ph_decreased_by ?? null,
           },
         },
-        schedules: normalized,
       });
-      setSchedules(normalized);
-      setSavedMode(mode);
-      setInitialSnapshot(getPlannerSnapshot(mode, fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint, normalized));
+      setInitialFertigationSnapshot(getFertigationSnapshot(fertigationTimeMin, noOfNutritionTank, ecCalibrationPoint, phCalibrationPoint));
       toast({
-        title: t("sinchaiPlanner.savedTitle"),
-        description: t("sinchaiPlanner.savedDescription"),
+        title: t("sinchaiPlanner.fertigationUpdatedTitle"),
+        description: t("sinchaiPlanner.fertigationUpdatedDescription"),
       });
+      window.setTimeout(() => window.location.reload(), 250);
     } catch (error) {
-      console.error("Sinchai planner save failed:", error);
-      toast({
-        title: t("sinchaiPlanner.saveFailedTitle"),
-        description: t("sinchaiPlanner.saveFailedDescription"),
-        variant: "destructive",
-      });
+      console.error("Fertigation settings update failed:", error);
+      setValidationError(t("sinchaiPlanner.fertigationUpdateFailedDescription"));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleModeUpdate = async () => {
+    if (!token || !userId) {
+      setValidationError(t("dashboard.estopConfigMissingDescription"));
+      return;
+    }
+    if (!isModeDirty) return;
+
+    try {
+      setIsModeUpdating(true);
+      await updateSinchaiPlannerMode({
+        token,
+        userId,
+        mode,
+      });
+      setSavedMode(mode);
+      toast({
+        title: t("sinchaiPlanner.modeUpdatedTitle"),
+        description: t("sinchaiPlanner.modeUpdatedDescription"),
+      });
+    } catch (error) {
+      console.error("Planner mode update failed:", error);
+      setValidationError(t("sinchaiPlanner.modeUpdateFailedDescription"));
+    } finally {
+      setIsModeUpdating(false);
     }
   };
 
@@ -726,6 +892,8 @@ export default function SinchaiPlanner() {
         valves: manualSelectedValves,
       });
       setManualRunning(true);
+      setManualRunningEndsAt(Date.now() + manualDurationMin * 60 * 1000);
+      setManualRunningCountdownSec(Math.ceil(manualDurationMin * 60));
       toast({
         title: t("sinchaiPlanner.manualStartedTitle"),
         description: t("sinchaiPlanner.manualStartedDescription"),
@@ -762,6 +930,8 @@ export default function SinchaiPlanner() {
         farmId,
       });
       setManualRunning(false);
+      setManualRunningEndsAt(null);
+      setManualRunningCountdownSec(0);
       toast({
         title: t("sinchaiPlanner.manualStoppedTitle"),
         description: t("sinchaiPlanner.manualStoppedDescription"),
@@ -813,7 +983,8 @@ export default function SinchaiPlanner() {
     }
     const nutritionTankPayload: Record<string, number> = {};
     for (const label of nutritionTankLabels) {
-      const numericValue = parseNullableNumber(manualFertigationNutritionTanks[label] ?? "");
+      const rawValue = manualFertigationNutritionTanks[label];
+      const numericValue = parseNullableNumber(rawValue ?? "");
       if (numericValue === null) {
         setValidationError(t("sinchaiPlanner.manualFertigationValidationTankNumeric", { tank: label }));
         return;
@@ -859,8 +1030,29 @@ export default function SinchaiPlanner() {
     return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   }, [manualFertigationRunning, manualFertigationCountdownSec]);
 
+  const manualRunningCountdownLabel = useMemo(() => {
+    if (!manualRunning || manualRunningCountdownSec <= 0) return "--:--";
+    const min = Math.floor(manualRunningCountdownSec / 60);
+    const sec = manualRunningCountdownSec % 60;
+    return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }, [manualRunning, manualRunningCountdownSec]);
+
+  const manualModeBlockLabels = useMemo(
+    () => ({
+      irrigation: manualRunning ? t("sinchaiPlanner.manualModeAutoBlockedIrrigation", { time: manualRunningCountdownLabel }) : null,
+      fertigation: manualFertigationRunning
+        ? t("sinchaiPlanner.manualModeAutoBlockedFertigation", { time: manualFertigationCountdownLabel })
+        : null,
+    }),
+    [manualRunning, manualRunningCountdownLabel, manualFertigationRunning, manualFertigationCountdownLabel, t],
+  );
+
   const handleModeChange = (nextMode: PlannerMode) => {
     if (nextMode === mode) return;
+    if (mode === "Manual" && nextMode === "Auto" && (manualRunning || manualFertigationRunning)) {
+      setIsManualModeBlockDialogOpen(true);
+      return;
+    }
     if (mode === "Auto" && nextMode === "Manual" && autoModeActivityRunning) {
       setPendingModeAfterEStop(nextMode);
       setIsModeSwitchEStopDialogOpen(true);
@@ -942,39 +1134,38 @@ export default function SinchaiPlanner() {
               <option value="Manual">{t("dashboard.manual")}</option>
             </select>
           </div>
+          <div className="md:col-span-2 flex justify-end">
+            <Button
+              type="button"
+              onClick={handleModeUpdate}
+              disabled={!isModeDirty || isModeUpdating}
+              className={isModeDirty ? "shadow-md shadow-cyan-200/60 ring-1 ring-cyan-300/60" : ""}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {isModeUpdating ? t("sinchaiPlanner.updatingMode") : t("sinchaiPlanner.updateMode")}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-semibold text-slate-900">
-          {mode === "Manual" ? t("sinchaiPlanner.manualCardTitle") : t("sinchaiPlanner.schedulesTitle")}
-        </h2>
-        <div className="flex items-center gap-2">
-          {mode === "Auto" ? (
-            <Button type="button" variant="outline" onClick={addSchedule}>
-              <Plus className="mr-2 h-4 w-4" />
-              {t("sinchaiPlanner.addSchedule")}
-            </Button>
-          ) : null}
-          <Button type="button" onClick={handleSave} disabled={isSaving || !isDirty}>
-            <Save className="mr-2 h-4 w-4" />
-            {isSaving ? t("sinchaiPlanner.saving") : t("sinchaiPlanner.saveAll")}
-          </Button>
-        </div>
-      </div>
-
-      <Card className="border-slate-700/70 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900/80 text-slate-100 shadow-[0_18px_42px_-24px_rgba(4,12,28,0.8)]">
+      <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-lime-50 to-amber-50 text-slate-900 shadow-[0_18px_40px_-24px_rgba(70,140,95,0.35)]">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-emerald-200">
-            <FlaskConical className="h-5 w-5" />
-            {t("sinchaiPlanner.fertigationTitle")}
-          </CardTitle>
-          <CardDescription className="text-slate-300">{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <CardTitle className="flex items-center gap-2 text-emerald-900">
+              <FlaskConical className="h-5 w-5" />
+              {t("sinchaiPlanner.fertigationTitle")}
+            </CardTitle>
+            <Button type="button" onClick={handleFertigationApplyChanges} disabled={!isFertigationDirty || isSaving} className="shrink-0">
+              <Save className="mr-2 h-4 w-4" />
+              {isSaving ? t("sinchaiPlanner.applyingChanges") : t("sinchaiPlanner.applyChanges")}
+            </Button>
+          </div>
+          <CardDescription className="text-slate-600">{t("sinchaiPlanner.fertigationDescription")}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5 [&_input]:bg-white/95 [&_input]:text-slate-900 [&_input]:placeholder:text-slate-500">
+        <CardContent className="space-y-5 [&_input]:border-emerald-200/80 [&_input]:bg-white [&_input]:text-slate-900 [&_input]:placeholder:text-slate-500 [&_input]:shadow-sm">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-slate-200">{t("sinchaiPlanner.fertigationTimeMin")}</Label>
+                <Label className="text-emerald-900">{t("sinchaiPlanner.fertigationTimeMin")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -984,19 +1175,21 @@ export default function SinchaiPlanner() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-200">{t("sinchaiPlanner.noOfNutritionTank")}</Label>
+                <Label className="text-emerald-900">{t("sinchaiPlanner.noOfNutritionTank")}</Label>
                 <Input
                   type="number"
                   min={0}
                   value={noOfNutritionTank ?? ""}
                   placeholder={t("sinchaiPlanner.noOfNutritionTankPlaceholder")}
-                  onChange={(event) => setNoOfNutritionTank(parseNullableNumber(event.target.value))}
+                  readOnly
+                  aria-readonly="true"
+                  className="cursor-not-allowed bg-white text-slate-900 opacity-100"
                 />
               </div>
             </div>
 
-            <div className="rounded-xl border border-violet-300/40 bg-violet-950/30 p-4">
-              <p className="mb-3 text-sm font-bold text-violet-900">{t("sinchaiPlanner.ecCalibrationTitle")}</p>
+            <div className="rounded-xl border border-emerald-200/80 bg-white/70 p-4">
+              <p className="mb-3 text-sm font-bold text-emerald-900">{t("sinchaiPlanner.ecCalibrationTitle")}</p>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label className="text-xs text-violet-800">{t("sinchaiPlanner.concentrationSolutionQtyMl")}</Label>
@@ -1044,8 +1237,8 @@ export default function SinchaiPlanner() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-sky-300/40 bg-sky-950/25 p-4">
-              <p className="mb-3 text-sm font-bold text-sky-900">{t("sinchaiPlanner.phCalibrationTitle")}</p>
+            <div className="rounded-xl border border-amber-200/80 bg-white/70 p-4">
+              <p className="mb-3 text-sm font-bold text-amber-900">{t("sinchaiPlanner.phCalibrationTitle")}</p>
               <div className="space-y-4">
                 <div className="rounded-lg border border-sky-200/70 bg-white/80 p-3">
                   <p className="mb-2 text-xs font-bold text-sky-800">{t("sinchaiPlanner.phUpBasicSolution")}</p>
@@ -1184,6 +1377,23 @@ export default function SinchaiPlanner() {
           </DialogHeader>
           <Button type="button" variant="destructive" onClick={handleModeSwitchEStop} disabled={isModeSwitchEStopSubmitting}>
             {t("dashboard.stop")}
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isManualModeBlockDialogOpen} onOpenChange={setIsManualModeBlockDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("sinchaiPlanner.manualModeAutoBlockedTitle")}</DialogTitle>
+            <DialogDescription>{t("sinchaiPlanner.manualModeAutoBlockedDescription")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-slate-700">
+            {manualModeBlockLabels.irrigation ? <p>{manualModeBlockLabels.irrigation}</p> : null}
+            {manualModeBlockLabels.fertigation ? <p>{manualModeBlockLabels.fertigation}</p> : null}
+            <p className="font-semibold text-amber-900">{t("sinchaiPlanner.manualModeAutoBlockedFooter")}</p>
+          </div>
+          <Button type="button" onClick={() => setIsManualModeBlockDialogOpen(false)}>
+            OK
           </Button>
         </DialogContent>
       </Dialog>
@@ -1404,258 +1614,382 @@ export default function SinchaiPlanner() {
         </div>
       ) : (
         <div className="space-y-4">
-          {schedules.map((schedule, index) => (
-            <motion.div
-              key={schedule.schedule_no}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, delay: index * 0.03 }}
-            >
-              <Card className="border-cyan-200/60 shadow-[0_14px_34px_-26px_rgba(20,95,170,0.65)]">
-                <CardHeader className="pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="text-lg">
-                      {t("sinchaiPlanner.schedule")} {schedule.schedule_no}
-                    </CardTitle>
-                    <Button type="button" variant="destructive" size="sm" onClick={() => deleteSchedule(schedule.schedule_no)}>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      {t("sinchaiPlanner.delete")}
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <div className="space-y-2">
-                      <Label>{t("sinchaiPlanner.scheduleName")}</Label>
-                      <Input
-                        value={schedule.schedule_name}
-                        onChange={(event) =>
-                          updateSchedule(schedule.schedule_no, (prev) => ({
-                            ...prev,
-                            schedule_name: event.target.value,
-                          }))
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-semibold text-slate-900">{t("sinchaiPlanner.schedulesTitle")}</h2>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={addSchedule}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t("sinchaiPlanner.addSchedule")}
+              </Button>
+              <Button type="button" onClick={handleSave} disabled={isSaving || !isDirty}>
+                <Save className="mr-2 h-4 w-4" />
+                {isSaving ? t("sinchaiPlanner.saving") : t("sinchaiPlanner.saveAll")}
+              </Button>
+            </div>
+          </div>
+          {schedules.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {schedules.map((schedule, index) => {
+                  const active = schedule.schedule_no === selectedScheduleNo;
+                  return (
+                    <motion.div
+                      key={schedule.schedule_no}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: index * 0.02 }}
+                      onClick={() => setSelectedScheduleNo(schedule.schedule_no)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedScheduleNo(schedule.schedule_no);
                         }
-                        placeholder={`${t("sinchaiPlanner.schedule")} ${schedule.schedule_no}`}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t("sinchaiPlanner.startTime")}</Label>
-                      <Input
-                        type="time"
-                        value={schedule.start_time}
-                        onChange={(event) =>
-                          updateSchedule(schedule.schedule_no, (prev) => ({
-                            ...prev,
-                            start_time: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t("sinchaiPlanner.duration")}</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={schedule.irrigation_duration_min ?? ""}
-                        onChange={(event) =>
-                          updateSchedule(schedule.schedule_no, (prev) => ({
-                            ...prev,
-                            irrigation_duration_min: event.target.value ? Number(event.target.value) : null,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t("sinchaiPlanner.fertigationStatus")}</Label>
-                      <div className="flex h-10 items-center justify-between rounded-md border border-input px-3">
-                        <span className="text-sm text-slate-700">
-                          {schedule.enabled ? t("sinchaiPlanner.enabled") : t("sinchaiPlanner.disabled")}
-                        </span>
-                        <Switch
-                          checked={schedule.enabled}
-                          onCheckedChange={(checked) =>
-                            updateSchedule(schedule.schedule_no, (prev) => ({
-                              ...prev,
-                              enabled: checked,
-                            }))
-                          }
-                        />
+                      }}
+                      className={`group flex min-w-[220px] cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left shadow-[0_12px_30px_-22px_rgba(20,95,170,0.45)] transition-all duration-200 ${
+                        active
+                          ? "border-cyan-400 bg-cyan-50 ring-2 ring-cyan-200"
+                          : "border-cyan-200 bg-white hover:border-cyan-300 hover:bg-cyan-50/70"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-700">
+                          {t("sinchaiPlanner.schedule")} {schedule.schedule_no}
+                        </p>
+                        <p className="truncate text-sm font-semibold text-slate-900">{schedule.schedule_name || `Schedule ${schedule.schedule_no}`}</p>
                       </div>
-                    </div>
-                  </div>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteSchedule(schedule.schedule_no);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </motion.div>
+                  );
+                })}
+              </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-3">
-                      <p className="text-sm font-semibold text-violet-800">{t("sinchaiPlanner.ecLimits")}</p>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs text-violet-700">{t("sinchaiPlanner.lowerLimit")}</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={schedule.ec_lower_limit ?? ""}
-                            onChange={(event) =>
-                              updateSchedule(schedule.schedule_no, (prev) => ({
-                                ...prev,
-                                ec_lower_limit: parseNullableNumber(event.target.value),
-                              }))
-                            }
-                          />
+              {selectedSchedule ? (
+                <motion.div
+                  key={selectedSchedule.schedule_no}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <Card className="border-cyan-200/60 shadow-[0_14px_34px_-26px_rgba(20,95,170,0.65)]">
+                    <CardHeader className="pb-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <CardTitle className="text-lg">
+                          {t("sinchaiPlanner.schedule")} {selectedSchedule.schedule_no}
+                        </CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div
+                        className={`rounded-2xl border border-cyan-200/90 bg-gradient-to-br from-cyan-50 via-sky-50 to-blue-50 p-4 shadow-[0_12px_28px_-20px_rgba(16,110,200,0.45)] transition-all duration-300 ${
+                          selectedSchedule.refill_enabled ?? true ? "opacity-100" : "opacity-75"
+                        }`}
+                      >
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-cyan-800">
+                            {t("sinchaiPlanner.refillSectionTitle")}
+                          </p>
+                          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300 bg-white/90 px-3 py-1.5 shadow-sm">
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-700">
+                              {t("sinchaiPlanner.refillSectionTitle")}
+                            </span>
+                            <Switch
+                              checked={selectedSchedule.refill_enabled ?? true}
+                              onCheckedChange={(checked) =>
+                                updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  refill_enabled: checked,
+                                }))
+                              }
+                            />
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-violet-700">{t("sinchaiPlanner.upperLimit")}</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={schedule.ec_upper_limit ?? ""}
-                            onChange={(event) =>
-                              updateSchedule(schedule.schedule_no, (prev) => ({
-                                ...prev,
-                                ec_upper_limit: parseNullableNumber(event.target.value),
-                              }))
-                            }
-                          />
+                        <div className="grid gap-4 md:grid-cols-3">
+                          <div className="space-y-2">
+                            <Label>{t("sinchaiPlanner.scheduleName")}</Label>
+                            <Input
+                              value={selectedSchedule.schedule_name}
+                              disabled={!(selectedSchedule.refill_enabled ?? true)}
+                              onChange={(event) =>
+                                updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  schedule_name: event.target.value,
+                                }))
+                              }
+                              placeholder={`${t("sinchaiPlanner.schedule")} ${selectedSchedule.schedule_no}`}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t("sinchaiPlanner.startTime")}</Label>
+                            <Input
+                              type="time"
+                              value={selectedSchedule.start_time}
+                              disabled={!(selectedSchedule.refill_enabled ?? true)}
+                              onChange={(event) =>
+                                updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  start_time: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t("sinchaiPlanner.refillDuration")}</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={selectedSchedule.refill_duration_min ?? ""}
+                              disabled={!(selectedSchedule.refill_enabled ?? true)}
+                              onChange={(event) =>
+                                updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  refill_duration_min: event.target.value ? Number(event.target.value) : null,
+                                }))
+                              }
+                            />
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-violet-700">
-                            {t("sinchaiPlanner.nutritionTanks")}
-                          </p>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-violet-300 bg-white text-violet-700 transition hover:bg-violet-100"
-                                aria-label={t("sinchaiPlanner.nutritionTanksInfoLabel")}
-                              >
-                                <Info className="h-3.5 w-3.5" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="w-72 border-violet-200 bg-white/95 text-sm text-slate-700">
-                              {t("sinchaiPlanner.nutritionTanksInfo")}
-                            </PopoverContent>
-                          </Popover>
+
+                      <div className="rounded-2xl border border-violet-200/90 bg-gradient-to-br from-violet-50 via-fuchsia-50 to-purple-50 p-4 shadow-[0_12px_28px_-20px_rgba(120,75,210,0.55)]">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-violet-800">{t("sinchaiPlanner.fertigateSectionTitle")}</p>
+                          <div className="inline-flex items-center gap-2 rounded-full border border-violet-300 bg-white/90 px-3 py-1.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-700">
+                              {t("sinchaiPlanner.fertigationStatus")}
+                            </span>
+                            <Switch
+                              checked={selectedSchedule.fertigation_enabled ?? selectedSchedule.enabled}
+                              onCheckedChange={(checked) =>
+                                updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  enabled: checked,
+                                  fertigation_enabled: checked,
+                                }))
+                              }
+                            />
+                            <span className="text-xs font-semibold text-slate-700">
+                              {(selectedSchedule.fertigation_enabled ?? selectedSchedule.enabled)
+                                ? t("sinchaiPlanner.enabled")
+                                : t("sinchaiPlanner.disabled")}
+                            </span>
+                          </div>
                         </div>
-                        {nutritionTankLabels.length > 0 ? (
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {nutritionTankLabels.map((tankLabel) => (
-                              <div key={`${schedule.schedule_no}-nutrition-tank-${tankLabel}`} className="space-y-1">
-                                <Label className="text-xs text-violet-700">
-                                  {t("sinchaiPlanner.nutritionTank")} {tankLabel}
-                                </Label>
+
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-violet-200/80 bg-white/75 p-3 shadow-sm">
+                            <p className="text-sm font-semibold text-violet-800">{t("sinchaiPlanner.ecLimits")}</p>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label className="text-xs text-violet-700">{t("sinchaiPlanner.lowerLimit")}</Label>
                                 <Input
-                                  value={schedule.nutrition_tanks?.[tankLabel] ?? ""}
-                                  placeholder={`${t("sinchaiPlanner.nutritionTank")} ${tankLabel}`}
-                                  className="bg-white/80 text-violet-800 placeholder:text-violet-400"
+                                  type="number"
+                                  step="0.1"
+                                  value={selectedSchedule.ec_lower_limit ?? ""}
                                   onChange={(event) =>
-                                    updateSchedule(schedule.schedule_no, (prev) => ({
+                                    updateSchedule(selectedSchedule.schedule_no, (prev) => ({
                                       ...prev,
-                                      nutrition_tanks: {
-                                        ...(prev.nutrition_tanks ?? {}),
-                                        [tankLabel]: event.target.value,
-                                      },
+                                      ec_lower_limit: parseNullableNumber(event.target.value),
                                     }))
                                   }
                                 />
                               </div>
-                            ))}
+                              <div className="space-y-1">
+                                <Label className="text-xs text-violet-700">{t("sinchaiPlanner.upperLimit")}</Label>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  value={selectedSchedule.ec_upper_limit ?? ""}
+                                  onChange={(event) =>
+                                    updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                      ...prev,
+                                      ec_upper_limit: parseNullableNumber(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                            </div>
                           </div>
-                        ) : (
-                          <p className="text-xs text-violet-700/80">{t("sinchaiPlanner.noNutritionTanksHint")}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-fuchsia-200 bg-fuchsia-50/70 p-3">
-                      <p className="text-sm font-semibold text-fuchsia-800">{t("sinchaiPlanner.phLimits")}</p>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.lowerLimit")}</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={schedule.ph_lower_limit ?? ""}
-                            onChange={(event) =>
-                              updateSchedule(schedule.schedule_no, (prev) => ({
-                                ...prev,
-                                ph_lower_limit: parseNullableNumber(event.target.value),
-                              }))
-                            }
-                          />
+                          <div className="rounded-xl border border-fuchsia-200/80 bg-white/75 p-3 shadow-sm">
+                            <p className="text-sm font-semibold text-fuchsia-800">{t("sinchaiPlanner.phLimits")}</p>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.lowerLimit")}</Label>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  value={selectedSchedule.ph_lower_limit ?? ""}
+                                  onChange={(event) =>
+                                    updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                      ...prev,
+                                      ph_lower_limit: parseNullableNumber(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.upperLimit")}</Label>
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  value={selectedSchedule.ph_upper_limit ?? ""}
+                                  onChange={(event) =>
+                                    updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                      ...prev,
+                                      ph_upper_limit: parseNullableNumber(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-fuchsia-700">{t("sinchaiPlanner.upperLimit")}</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            value={schedule.ph_upper_limit ?? ""}
-                            onChange={(event) =>
-                              updateSchedule(schedule.schedule_no, (prev) => ({
-                                ...prev,
-                                ph_upper_limit: parseNullableNumber(event.target.value),
-                              }))
-                            }
-                          />
+
+                        <div className="mt-3 space-y-2 rounded-xl border border-violet-200/80 bg-white/75 p-3 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-[0.06em] text-violet-700">
+                              {t("sinchaiPlanner.nutritionTanks")}
+                            </p>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-violet-300 bg-white text-violet-700 transition hover:bg-violet-100"
+                                  aria-label={t("sinchaiPlanner.nutritionTanksInfoLabel")}
+                                >
+                                  <Info className="h-3.5 w-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent align="start" className="w-72 border-violet-200 bg-white/95 text-sm text-slate-700">
+                                {t("sinchaiPlanner.nutritionTanksInfo")}
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          {nutritionTankLabels.length > 0 ? (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {nutritionTankLabels.map((tankLabel) => (
+                                <div key={`${selectedSchedule.schedule_no}-nutrition-tank-${tankLabel}`} className="space-y-1">
+                                  <Label className="text-xs text-violet-700">
+                                    {t("sinchaiPlanner.nutritionTank")} {tankLabel}
+                                  </Label>
+                                  <Input
+                                    value={selectedSchedule.nutrition_tanks?.[tankLabel] ?? ""}
+                                    placeholder={`${t("sinchaiPlanner.nutritionTank")} ${tankLabel}`}
+                                    className="bg-white/90 text-violet-800 placeholder:text-violet-400"
+                                    onChange={(event) =>
+                                      updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                        ...prev,
+                                        nutrition_tanks: {
+                                          ...(prev.nutrition_tanks ?? {}),
+                                          [tankLabel]: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-violet-700/80">{t("sinchaiPlanner.noNutritionTanksHint")}</p>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.selectValves")}</p>
-                    <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                      {valveOptions.map((valve) => {
-                        const checked = schedule.valves.includes(valve);
-                        return (
-                          <label
-                            key={`${schedule.schedule_no}-${valve}`}
-                            className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(state) =>
-                                updateSchedule(schedule.schedule_no, (prev) => ({
-                                  ...prev,
-                                  valves: toggleListValue(prev.valves, valve, state === true, valveOptions),
-                                }))
-                              }
-                            />
-                            <span>{valve}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
+                      <div className="rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-4 shadow-[0_12px_28px_-20px_rgba(14,135,95,0.45)]">
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-800">{t("sinchaiPlanner.irrigateSectionTitle")}</p>
+                        <div className="space-y-4">
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <div className="space-y-2 md:col-span-1">
+                              <Label>{t("sinchaiPlanner.duration")}</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={selectedSchedule.irrigation_duration_min ?? ""}
+                                onChange={(event) =>
+                                  updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                    ...prev,
+                                    irrigation_duration_min: event.target.value ? Number(event.target.value) : null,
+                                  }))
+                                }
+                              />
+                            </div>
+                          </div>
 
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.repeatDays")}</p>
-                    <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                      {sinchaiDayOptions.map((day) => {
-                        const checked = schedule.days.includes(day);
-                        return (
-                          <label
-                            key={`${schedule.schedule_no}-${day}`}
-                            className="flex items-center gap-2 rounded-md border border-cyan-200 bg-cyan-50/60 px-3 py-2 text-sm"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(state) =>
-                                updateSchedule(schedule.schedule_no, (prev) => ({
-                                  ...prev,
-                                  days: toggleListValue(prev.days, day, state === true, sinchaiDayOptions),
-                                }))
-                              }
-                            />
-                            <span>{day}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                          <div className="space-y-2">
+                            <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.selectValves")}</p>
+                            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                              {valveOptions.map((valve) => {
+                                const checked = selectedSchedule.valves.includes(valve);
+                                return (
+                                  <label
+                                    key={`${selectedSchedule.schedule_no}-${valve}`}
+                                    className="flex items-center gap-2 rounded-md border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm"
+                                  >
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={(state) =>
+                                        updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                          ...prev,
+                                          valves: toggleListValue(prev.valves, valve, state === true, valveOptions),
+                                        }))
+                                      }
+                                    />
+                                    <span>{valve}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <p className="text-sm font-semibold text-slate-800">{t("sinchaiPlanner.repeatDays")}</p>
+                            <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                              {sinchaiDayOptions.map((day) => {
+                                const checked = selectedSchedule.days.includes(day);
+                                return (
+                                  <label
+                                    key={`${selectedSchedule.schedule_no}-${day}`}
+                                    className="flex items-center gap-2 rounded-md border border-emerald-200 bg-white/90 px-3 py-2 text-sm shadow-sm"
+                                  >
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={(state) =>
+                                        updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                          ...prev,
+                                          days: toggleListValue(prev.days, day, state === true, sinchaiDayOptions),
+                                        }))
+                                      }
+                                    />
+                                    <span>{day}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ) : null}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-5 text-sm text-muted-foreground">{t("sinchaiPlanner.noSchedules")}</CardContent>
+            </Card>
+          )}
         </div>
       )}
 
