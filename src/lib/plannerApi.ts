@@ -656,6 +656,14 @@ function resolveSinchaiPlannerSaveEndpoint() {
   return "";
 }
 
+function resolveSinchaiPlannerModeUpdateEndpoint() {
+  const explicit = import.meta.env.VITE_SINCHAI_PLANNER_MODE_UPDATE_API_URL?.trim();
+  if (explicit) return explicit;
+  const apiBase = resolveSopApiBase();
+  if (apiBase) return `${apiBase.replace(/\/$/, "")}/update_sinchai_planer_mode`;
+  return resolveSinchaiPlannerSaveEndpoint();
+}
+
 export async function fetchSinchaiPlanner(args: {
   token: string;
   userId: string;
@@ -695,27 +703,7 @@ export async function fetchSinchaiPlanner(args: {
 export async function saveSinchaiPlanner(args: {
   token: string;
   userId: string;
-  mode: string;
   noOfValves: number;
-  fertigationTimeMin: number | null;
-  noOfNutritionTank: number | null;
-  ecCalibrationPoint: {
-    concentration_solution_liquid_quantity_ml: number | null;
-    ro_water_liter: number | null;
-    ec_increased_by: number | null;
-  };
-  phCalibrationPoint: {
-    ph_up_basic_solution: {
-      concentration_solution_liquid_quantity_ml: number | null;
-      ro_water_liter: number | null;
-      ph_increased_by: number | null;
-    };
-    ph_down_acidic_solution: {
-      concentration_solution_liquid_quantity_ml: number | null;
-      ro_water_liter: number | null;
-      ph_decreased_by: number | null;
-    };
-  };
   schedules: SinchaiSchedule[];
 }) {
   const endpoint = resolveSinchaiPlannerSaveEndpoint();
@@ -725,12 +713,7 @@ export async function saveSinchaiPlanner(args: {
 
   const body: Record<string, unknown> = {
     user_id: args.userId,
-    mode: args.mode,
     No_of_valves: Math.max(1, Math.trunc(args.noOfValves)),
-    fertigation_time_min: args.fertigationTimeMin,
-    no_of_nutrition_tank: args.noOfNutritionTank,
-    ec_calibration_point: args.ecCalibrationPoint,
-    ph_calibration_point: args.phCalibrationPoint,
     schedules: args.schedules,
   };
 
@@ -752,6 +735,42 @@ export async function saveSinchaiPlanner(args: {
 
   if (!response.ok) {
     throw new Error(`Sinchai planner save API failed (${response.status})`);
+  }
+
+  return data;
+}
+
+export async function updateSinchaiPlannerMode(args: {
+  token: string;
+  userId: string;
+  mode: string;
+}) {
+  const endpoint = resolveSinchaiPlannerModeUpdateEndpoint();
+  if (!endpoint) {
+    throw new Error("Missing Sinchai planner mode update API endpoint");
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${args.token}`,
+    },
+    body: JSON.stringify({
+      user_id: args.userId,
+      mode: args.mode,
+    }),
+  });
+
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Sinchai planner mode update API failed (${response.status})`);
   }
 
   return data;
