@@ -186,3 +186,16 @@ export async function fetchHistoricalData(args: {
     },
   });
 }
+
+export async function fetchIrrigationFertigationLogs(args: {
+  apiBase: string;
+  token: string;
+  userId: string;
+  farmId: string | number;
+}) {
+  const url = `${args.apiBase.replace(/\/$/, "")}/Irrigate_fertigate_log`;
+  return postJson(url, args.token, {
+    user_id: args.userId,
+    farm_id: typeof args.farmId === "number" ? args.farmId : Number(args.farmId),
+  });
+}

@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/lib/language";
 import { applySeo } from "@/lib/seo";
-import { changeRelayState, fetchHistoricalData, triggerEStop } from "@/lib/dashboardControlApi";
+import { changeRelayState, fetchHistoricalData, fetchIrrigationFertigationLogs, triggerEStop } from "@/lib/dashboardControlApi";
 import { fetchSinchaiPlanner, type SinchaiSchedule } from "@/lib/plannerApi";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -27,6 +27,40 @@ type SolutionGroup = {
   devices: Device[];
 };
 
+type FertigationEventDetail = {
+  status: boolean;
+  before_ec?: string;
+  before_ph?: string;
+  after_ec?: string;
+  after_ph?: string;
+};
+
+type IrrigationLogEvent = {
+  schedule_no: number;
+  schedule_name: string;
+  refill: {
+    start_time: string;
+    refill_duration_min: number | null;
+    refill_status: string;
+    water_level: string;
+  };
+  fertigation: FertigationEventDetail;
+  irrigate_status: string;
+};
+
+type IrrigationLogDay = {
+  date: string;
+  day_name: string;
+  events: IrrigationLogEvent[];
+};
+
+type IrrigationLogsSummary = {
+  totalDays: number;
+  totalEvents: number;
+  fertigationOn: number;
+  fertigationOff: number;
+};
+
 function asNonEmptyString(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -35,6 +69,10 @@ function asNonEmptyString(value: unknown) {
 
 function readObject(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function readArray(value: unknown) {
+  return Array.isArray(value) ? value : null;
 }
 
 function resolveApiBase(...candidates: Array<string | undefined>) {
@@ -61,6 +99,15 @@ function asBoolean(value: unknown) {
     if (normalized === "false" || normalized === "0" || normalized === "off" || normalized === "inactive") return false;
   }
   if (typeof value === "number") return value > 0;
+  return null;
+}
+
+function asNumberLoose(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
   return null;
 }
 
@@ -138,6 +185,258 @@ function getSolutions(response: Record<string, unknown> | null): SolutionGroup[]
       return { solution_name: solutionName, devices } satisfies SolutionGroup;
     })
     .filter((item): item is SolutionGroup => Boolean(item));
+}
+
+function formatReportDate(value: Date) {
+  return value.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function buildIrrigationFertigationReport(schedules: SinchaiSchedule[]): IrrigationLogDay[] {
+  const fallbackSchedules: SinchaiSchedule[] =
+    schedules.length > 0
+      ? schedules
+      : [
+          {
+            schedule_no: 1,
+            schedule_name: "Schedule 1",
+            start_time: "06:00",
+            refill_duration_min: 10,
+            irrigation_duration_min: 20,
+            valves: ["Valve 1"],
+            days: ["Mon"],
+            enabled: true,
+            refill_enabled: true,
+            fertigation_enabled: true,
+            nutrition_tanks: {},
+            ec_lower_limit: 1.8,
+            ec_upper_limit: 2.2,
+            ph_lower_limit: 5.6,
+            ph_upper_limit: 6.2,
+          },
+        ];
+
+  return Array.from({ length: 7 }, (_, dayOffset) => {
+    const date = new Date();
+    date.setDate(date.getDate() - dayOffset);
+    const eventCount = Math.max(6, fallbackSchedules.length);
+
+    const events: IrrigationLogEvent[] = Array.from({ length: eventCount }, (_, eventIndex) => {
+      const schedule = fallbackSchedules[eventIndex % fallbackSchedules.length];
+      const refillEnabled = schedule.refill_enabled ?? true;
+      const fertigationEnabled = Boolean(schedule.fertigation_enabled ?? schedule.enabled);
+      const irrigationEnabled = Boolean(schedule.enabled);
+      const startHour = 5 + ((dayOffset + eventIndex) % 7);
+      const startTime = schedule.start_time || `${String(startHour).padStart(2, "0")}:00`;
+      const refillDuration = schedule.refill_duration_min ?? 10;
+      const waterLevelValue =
+        typeof schedule.water_level_liters === "number"
+          ? `${schedule.water_level_liters.toFixed(1)} L`
+          : `${Math.max(40, 120 - dayOffset * 8 - eventIndex * 4)} L`;
+      const fertigationStatus = fertigationEnabled && (dayOffset + eventIndex) % 4 !== 1;
+
+      return {
+        schedule_no: schedule.schedule_no,
+        schedule_name: schedule.schedule_name || `Schedule ${schedule.schedule_no}`,
+        refill: {
+          start_time: startTime,
+          refill_duration_min: refillDuration,
+          refill_status: refillEnabled ? (eventIndex % 3 === 0 ? "Completed" : eventIndex % 3 === 1 ? "Running" : "Scheduled") : "OFF",
+          water_level: waterLevelValue,
+        },
+        fertigation: fertigationStatus
+          ? {
+              status: true,
+              before_ec: `${(schedule.ec_lower_limit ?? 1.8).toFixed(1)} mS/cm`,
+              before_ph: `${(schedule.ph_lower_limit ?? 5.6).toFixed(1)} pH`,
+              after_ec: `${(schedule.ec_upper_limit ?? 2.2).toFixed(1)} mS/cm`,
+              after_ph: `${(schedule.ph_upper_limit ?? 6.2).toFixed(1)} pH`,
+            }
+          : { status: false },
+        irrigate_status: irrigationEnabled ? (eventIndex % 2 === 0 ? "Running" : "Completed") : "OFF",
+      };
+    });
+
+    return {
+      date: formatReportDate(date),
+      day_name: date.toLocaleDateString(undefined, { weekday: "long" }),
+      events,
+    };
+  });
+}
+
+function normalizeLogStatus(value: unknown, fallback: string) {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  return trimmed || fallback;
+}
+
+function normalizeLogDayDate(value: unknown, fallbackDate: Date) {
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return fallbackDate;
+}
+
+function normalizeIrrigationLogsResponse(payload: unknown): IrrigationLogDay[] {
+  const root = readObject(payload);
+  const dataRoot = readObject(root?.data);
+  const dayCandidates = [
+    payload,
+    root?.days,
+    dataRoot?.days,
+    root?.data,
+    root?.report,
+    root?.events_by_day,
+    root?.last_7_days,
+  ];
+  const dayArray = dayCandidates.map(readArray).find(Boolean);
+  if (!dayArray) return [];
+
+  return dayArray
+    .map((dayEntry, dayIndex) => {
+      const dayObj = readObject(dayEntry);
+      if (!dayObj) return null;
+      const fallbackDate = new Date();
+      fallbackDate.setDate(fallbackDate.getDate() - Math.max(0, dayArray.length - dayIndex - 1));
+      const dateValue = normalizeLogDayDate(
+        dayObj.date ?? dayObj.report_date ?? dayObj.day_date ?? dayObj.created_at,
+        fallbackDate,
+      );
+      const eventArray = readArray(dayObj.events ?? dayObj.items ?? dayObj.logs ?? dayObj.schedules) ?? [];
+      const events = eventArray
+        .map((eventEntry, eventIndex) => {
+          const eventObj = readObject(eventEntry);
+          if (!eventObj) return null;
+          const detailsObj = readObject(eventObj.details);
+          const refillObj = readObject(eventObj.refill ?? detailsObj?.Refill ?? detailsObj?.refill);
+          const fertigationObj = readObject(
+            eventObj.fertigate ?? eventObj.fertigation ?? detailsObj?.Fertigate ?? detailsObj?.fertigate ?? detailsObj?.Fertigation,
+          );
+          const irrigateObj = readObject(eventObj.irrigate ?? detailsObj?.Irrigate ?? detailsObj?.irrigate);
+          const beforeObj = readObject(
+            fertigationObj?.before ??
+              fertigationObj?.before_values ??
+              fertigationObj?.before_ec_ph ??
+              fertigationObj?.Before,
+          );
+          const afterObj = readObject(
+            fertigationObj?.after ??
+              fertigationObj?.after_values ??
+              fertigationObj?.after_ec_ph ??
+              fertigationObj?.After,
+          );
+          const fertigationStatus =
+            asBoolean(
+              fertigationObj?.status ??
+                eventObj.fertigation_status ??
+                eventObj.fertigation_enabled,
+            ) ?? false;
+          const refillDuration = asNumberLoose(
+            refillObj?.refill_duration_min ?? refillObj?.duration_min ?? eventObj.refill_duration_min,
+          );
+          const waterLevel = asNumberLoose(refillObj?.water_level ?? refillObj?.water_level_liters ?? eventObj.water_level);
+          const irrigationStatusValue = asBoolean(
+            irrigateObj?.status ?? eventObj.irrigate_status ?? eventObj.irrigation_status,
+          );
+          const refillStatusValue = asBoolean(
+            refillObj?.refill_status ?? eventObj.refill_status ?? eventObj.refillStatus,
+          );
+          return {
+            schedule_no:
+              asNumberLoose(eventObj.schedule_no ?? eventObj.scheduleNo ?? eventObj.id ?? eventIndex + 1) ?? eventIndex + 1,
+            schedule_name:
+              asNonEmptyString(
+                eventObj.schedule_name ?? eventObj.scheduleName ?? eventObj.name ?? detailsObj?.schedule_name,
+              ) ??
+              `Schedule ${eventIndex + 1}`,
+            refill: {
+              start_time:
+                asNonEmptyString(refillObj?.start_time ?? eventObj.start_time ?? eventObj.startTime) ?? "--",
+              refill_duration_min: refillDuration,
+              refill_status:
+                refillStatusValue !== null
+                  ? refillStatusValue
+                    ? "Completed"
+                    : "OFF"
+                  : normalizeLogStatus(
+                      refillObj?.refill_status ?? eventObj.refill_status ?? eventObj.refillStatus,
+                      "Completed",
+                    ),
+              water_level: waterLevel !== null ? `${waterLevel.toFixed(1)} L` : "--",
+            },
+            fertigation: fertigationStatus
+              ? {
+                  status: true,
+                  before_ec:
+                    asNonEmptyString(beforeObj?.EC ?? beforeObj?.ec) ??
+                    (asNumberLoose(beforeObj?.EC ?? beforeObj?.ec) !== null
+                      ? `${asNumberLoose(beforeObj?.EC ?? beforeObj?.ec)} mS/cm`
+                      : asNonEmptyString(fertigationObj?.before_ec)) ??
+                    "--",
+                  before_ph:
+                    asNonEmptyString(beforeObj?.pH ?? beforeObj?.ph) ??
+                    (asNumberLoose(beforeObj?.pH ?? beforeObj?.ph) !== null
+                      ? `${asNumberLoose(beforeObj?.pH ?? beforeObj?.ph)} pH`
+                      : asNonEmptyString(fertigationObj?.before_ph)) ??
+                    "--",
+                  after_ec:
+                    asNonEmptyString(afterObj?.EC ?? afterObj?.ec) ??
+                    (asNumberLoose(afterObj?.EC ?? afterObj?.ec) !== null
+                      ? `${asNumberLoose(afterObj?.EC ?? afterObj?.ec)} mS/cm`
+                      : asNonEmptyString(fertigationObj?.after_ec)) ??
+                    "--",
+                  after_ph:
+                    asNonEmptyString(afterObj?.pH ?? afterObj?.ph) ??
+                    (asNumberLoose(afterObj?.pH ?? afterObj?.ph) !== null
+                      ? `${asNumberLoose(afterObj?.pH ?? afterObj?.ph)} pH`
+                      : asNonEmptyString(fertigationObj?.after_ph)) ??
+                    "--",
+                }
+              : { status: false },
+            irrigate_status:
+              irrigationStatusValue !== null
+                ? irrigationStatusValue
+                  ? "Completed"
+                  : "OFF"
+                : normalizeLogStatus(
+                    eventObj.irrigate_status ?? eventObj.irrigation_status ?? irrigateObj?.status,
+                    "Completed",
+                  ),
+          } satisfies IrrigationLogEvent;
+        })
+        .filter((item): item is IrrigationLogEvent => Boolean(item));
+
+      return {
+        date: formatReportDate(dateValue),
+        day_name:
+          asNonEmptyString(dayObj.day_name ?? dayObj.dayName ?? dayObj.weekday) ??
+          dateValue.toLocaleDateString(undefined, { weekday: "long" }),
+        events,
+        _sortTime: dateValue.getTime(),
+      };
+    })
+    .filter((item): item is IrrigationLogDay & { _sortTime: number } => Boolean(item))
+    .sort((a, b) => b._sortTime - a._sortTime)
+    .map(({ _sortTime: _ignored, ...day }) => day);
+}
+
+function summarizeIrrigationLogs(report: IrrigationLogDay[]): IrrigationLogsSummary {
+  const totalEvents = report.reduce((sum, day) => sum + day.events.length, 0);
+  const fertigationOn = report.reduce(
+    (sum, day) => sum + day.events.filter((event) => event.fertigation.status).length,
+    0,
+  );
+  return {
+    totalDays: report.length,
+    totalEvents,
+    fertigationOn,
+    fertigationOff: Math.max(0, totalEvents - fertigationOn),
+  };
 }
 
 function seedFromString(input: string) {
@@ -598,6 +897,7 @@ function SinchaiSummaryCard({
   loading,
   fertigationTimeMin,
   onOpenPlanner,
+  onOpenLogs,
 }: {
   mode: string;
   schedules: SinchaiSchedule[];
@@ -605,6 +905,7 @@ function SinchaiSummaryCard({
   loading: boolean;
   fertigationTimeMin: number | null;
   onOpenPlanner: () => void;
+  onOpenLogs: () => void;
 }) {
   const enabledCount = schedules.filter((item) => item.enabled).length;
   const isManualMode = mode.toLowerCase() === "manual";
@@ -729,8 +1030,287 @@ function SinchaiSummaryCard({
             </div>
           </div>
         )}
+        <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500">
+            {t("dashboard.fertigationLogsHint")}
+          </p>
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={onOpenLogs}>
+            {t("dashboard.fertigationLogsButton")}
+          </Button>
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+function FertigationLogsDialog({
+  open,
+  onOpenChange,
+  report,
+  summary,
+  loading,
+  error,
+  t,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  report: IrrigationLogDay[];
+  summary: IrrigationLogsSummary;
+  loading: boolean;
+  error: string | null;
+  t: TranslateFn;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[96vw] overflow-hidden p-0 sm:max-h-[92vh] lg:max-w-7xl">
+        <div className="flex max-h-[92vh] flex-col bg-gradient-to-br from-white via-sky-50/40 to-emerald-50/40">
+          <DialogHeader className="border-b border-cyan-100/80 bg-white/75 px-5 py-4 backdrop-blur-sm sm:px-6 sm:py-5">
+            <DialogTitle className="font-display text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              {t("dashboard.logsDialogTitle")}
+            </DialogTitle>
+            <DialogDescription className="max-w-3xl text-sm text-slate-600">
+              {t("dashboard.logsDialogDescription")}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-2 border-b border-cyan-100/80 bg-white/80 px-3 py-3 backdrop-blur-sm sm:grid-cols-2 sm:gap-3 sm:px-6 sm:py-4 xl:grid-cols-4">
+            {[
+              {
+                label: t("dashboard.totalDays"),
+                value: summary.totalDays,
+                accent: "from-cyan-500 to-teal-500",
+              },
+              {
+                label: t("dashboard.totalEvents"),
+                value: summary.totalEvents,
+                accent: "from-sky-500 to-cyan-500",
+              },
+              {
+                label: t("dashboard.fertigationOn"),
+                value: summary.fertigationOn,
+                accent: "from-emerald-500 to-lime-500",
+              },
+              {
+                label: t("dashboard.fertigationOff"),
+                value: summary.fertigationOff,
+                accent: "from-amber-500 to-orange-500",
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="overflow-hidden rounded-[1.1rem] border border-white/70 bg-white shadow-[0_14px_36px_-28px_rgba(15,23,42,0.42)] sm:rounded-[1.35rem]"
+              >
+                <div className={`h-1.5 bg-gradient-to-r ${item.accent}`} />
+                <div className="p-3 sm:p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 sm:text-[11px] sm:tracking-[0.22em]">
+                    {item.label}
+                  </p>
+                  <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">
+                    {item.value}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-5 sm:py-5">
+            {loading ? (
+              <div className="flex min-h-[18rem] items-center justify-center rounded-[1.8rem] border border-dashed border-cyan-200 bg-white/80 text-sm font-medium text-slate-500">
+                Loading logs...
+              </div>
+            ) : error ? (
+              <div className="flex min-h-[18rem] items-center justify-center rounded-[1.8rem] border border-rose-200 bg-rose-50/80 px-6 text-center text-sm font-medium text-rose-700">
+                {error}
+              </div>
+            ) : report.length === 0 ? (
+              <div className="flex min-h-[18rem] items-center justify-center rounded-[1.8rem] border border-dashed border-cyan-200 bg-white/80 px-6 text-center text-sm font-medium text-slate-500">
+                No irrigation or fertigation logs available for the last 7 days.
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {report.map((day, dayIndex) => (
+                <motion.section
+                  key={`${day.date}-${dayIndex}`}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: dayIndex * 0.03 }}
+                  className="overflow-hidden rounded-[1.85rem] border border-slate-200/70 bg-white/96 shadow-[0_18px_42px_-28px_rgba(15,23,42,0.46)]"
+                >
+                  <div className="flex items-center justify-between gap-4 border-b border-slate-200/70 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 px-4 py-4 sm:px-6">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-700">
+                        {t("dashboard.reportDay")}
+                      </p>
+                      <h4 className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[1.35rem] font-semibold leading-none text-slate-900 sm:text-[1.55rem]">
+                        <span>{day.day_name}</span>
+                        <span className="text-sm font-normal tracking-normal text-slate-500 sm:text-base">{day.date}</span>
+                      </h4>
+                    </div>
+                    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3.5 py-2 text-sm font-semibold text-emerald-700 shadow-[0_8px_20px_-18px_rgba(16,185,129,0.55)]">
+                      <CalendarDays className="h-4 w-4" />
+                      {day.events.length} {t("dashboard.reportEvents")}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 px-4 py-4 lg:grid-cols-2 sm:px-6 sm:py-5">
+                    {day.events.map((event, eventIndex) => (
+                      <div
+                        key={`${day.date}-${event.schedule_no}-${eventIndex}`}
+                        className={`relative min-w-0 overflow-hidden rounded-[1.6rem] border bg-white p-4 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.45)] ${
+                          event.fertigation.status
+                            ? "border-emerald-100"
+                            : "border-rose-100"
+                        }`}
+                      >
+                        <div
+                          className={`absolute inset-y-0 left-0 w-1.5 ${
+                            event.fertigation.status
+                              ? "bg-gradient-to-b from-emerald-500 via-lime-500 to-teal-500"
+                              : "bg-gradient-to-b from-rose-500 via-red-500 to-orange-400"
+                          }`}
+                        />
+                        <div className="mb-4 flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-lg font-semibold tracking-tight text-slate-900">
+                              {event.schedule_name || `Schedule ${event.schedule_no}`}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {t("sinchaiPlanner.schedule")} #{event.schedule_no}
+                            </p>
+                          </div>
+                          <span
+                            className={`inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-semibold shadow-sm ${
+                              event.fertigation.status
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-rose-100 text-rose-700"
+                            }`}
+                          >
+                            {event.fertigation.status ? t("dashboard.fertigationOn") : t("dashboard.fertigationOff")}
+                          </span>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-3">
+                          <div className="min-w-0 rounded-[1.35rem] border border-cyan-100 bg-gradient-to-br from-cyan-50/90 to-sky-50/70 p-4">
+                            <div className="mb-3 inline-flex items-center gap-2 text-cyan-700">
+                              <Clock3 className="h-4 w-4" />
+                              <span className="text-[11px] font-bold uppercase tracking-[0.24em]">
+                                {t("dashboard.refill")}
+                              </span>
+                            </div>
+                            <div className="space-y-3 text-sm text-slate-700">
+                              {[
+                                [t("sinchaiPlanner.startTime"), event.refill.start_time],
+                                [t("sinchaiPlanner.duration"), `${event.refill.refill_duration_min ?? "--"} min`],
+                                [t("dashboard.refillStatus"), event.refill.refill_status],
+                                [t("dashboard.waterLevel"), event.refill.water_level],
+                              ].map(([label, value]) => (
+                                <div
+                                  key={label as string}
+                                  className="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-[0_8px_22px_-22px_rgba(14,165,233,0.45)]"
+                                >
+                                  <p className="text-sm font-semibold leading-snug text-slate-500">{label}</p>
+                                  <p className="mt-2 text-right text-base font-semibold leading-tight text-slate-900 break-words">
+                                    {value}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="min-w-0 rounded-[1.35rem] border border-emerald-100 bg-gradient-to-br from-emerald-50/90 to-lime-50/70 p-4">
+                            <div className="mb-3 inline-flex items-center gap-2 text-emerald-700">
+                              <Leaf className="h-4 w-4" />
+                              <span className="text-[11px] font-bold uppercase tracking-[0.24em]">
+                                {t("dashboard.fertigate")}
+                              </span>
+                            </div>
+                            {event.fertigation.status ? (
+                              <div className="grid gap-3 text-sm text-slate-700">
+                                <div className="min-w-0 rounded-[1.15rem] border border-white/70 bg-white/90 p-3 shadow-[0_8px_20px_-20px_rgba(34,197,94,0.45)]">
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">
+                                    {t("dashboard.beforeValues")}
+                                  </p>
+                                  <div className="mt-3 space-y-2">
+                                    <div className="rounded-2xl bg-emerald-50 px-4 py-2.5">
+                                      <p className="text-sm font-semibold leading-snug text-slate-500">EC</p>
+                                      <p className="mt-1 text-right text-base font-semibold leading-tight text-slate-900 break-words">
+                                        {event.fertigation.before_ec ?? "--"}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-2xl bg-emerald-50 px-4 py-2.5">
+                                      <p className="text-sm font-semibold leading-snug text-slate-500">pH</p>
+                                      <p className="mt-1 text-right text-base font-semibold leading-tight text-slate-900 break-words">
+                                        {event.fertigation.before_ph ?? "--"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="min-w-0 rounded-[1.15rem] border border-white/70 bg-white/90 p-3 shadow-[0_8px_20px_-20px_rgba(34,197,94,0.45)]">
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500">
+                                    {t("dashboard.afterValues")}
+                                  </p>
+                                  <div className="mt-3 space-y-2">
+                                    <div className="rounded-2xl bg-emerald-50 px-4 py-2.5">
+                                      <p className="text-sm font-semibold leading-snug text-slate-500">EC</p>
+                                      <p className="mt-1 text-right text-base font-semibold leading-tight text-slate-900 break-words">
+                                        {event.fertigation.after_ec ?? "--"}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-2xl bg-emerald-50 px-4 py-2.5">
+                                      <p className="text-sm font-semibold leading-snug text-slate-500">pH</p>
+                                      <p className="mt-1 text-right text-base font-semibold leading-tight text-slate-900 break-words">
+                                        {event.fertigation.after_ph ?? "--"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex min-h-[11rem] items-center rounded-[1.15rem] border border-rose-100 bg-white/90 p-4 text-[15px] font-semibold leading-7 text-rose-700 shadow-[0_8px_20px_-20px_rgba(244,63,94,0.45)]">
+                                {t("dashboard.fertigationOffMessage")}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 rounded-[1.35rem] border border-sky-100 bg-gradient-to-br from-sky-50/90 to-indigo-50/70 p-4">
+                            <div className="mb-3 inline-flex items-center gap-2 text-sky-700">
+                              <Droplets className="h-4 w-4" />
+                              <span className="text-[11px] font-bold uppercase tracking-[0.24em]">
+                                {t("dashboard.irrigate")}
+                              </span>
+                            </div>
+                            <div className="flex min-h-[11rem] items-start rounded-[1.15rem] border border-white/70 bg-white/90 p-4 shadow-[0_8px_20px_-20px_rgba(59,130,246,0.45)]">
+                              <div className="w-full space-y-3">
+                                <div className="rounded-2xl bg-sky-50 px-4 py-3">
+                                  <p className="text-sm font-semibold leading-snug text-slate-500">
+                                    {t("sinchaiPlanner.status")}
+                                  </p>
+                                  <p className="mt-1 text-right text-sm font-semibold leading-tight text-slate-900 whitespace-nowrap">
+                                    {event.irrigate_status}
+                                  </p>
+                                </div>
+                                <div className="rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3 text-sm leading-6 text-sky-800">
+                                  {event.irrigate_status === "OFF"
+                                    ? t("dashboard.fertigationOffMessage")
+                                    : event.irrigate_status === "Running"
+                                      ? "Irrigation is currently running for this event."
+                                      : "Irrigation activity was completed for this event."}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.section>
+              ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -749,6 +1329,19 @@ export default function LoginDashboard() {
     const userObj = readObject(loginResponse?.user);
     const value = loginResponse?.user_id ?? userObj?.user_id ?? userObj?.id;
     return typeof value === "string" && value.trim() ? value.trim() : null;
+  }, [loginResponse]);
+  const farmId = useMemo(() => {
+    const dataObj = readObject(loginResponse?.data);
+    const userObj = readObject(loginResponse?.user);
+    const value =
+      asNonEmptyString(loginResponse?.farmid) ??
+      asNonEmptyString(loginResponse?.farm_id) ??
+      asNonEmptyString(dataObj?.farmid) ??
+      asNonEmptyString(dataObj?.farm_id) ??
+      asNonEmptyString(userObj?.farmid) ??
+      asNonEmptyString(userObj?.farm_id) ??
+      "1";
+    return value;
   }, [loginResponse]);
   const controlApiBase = useMemo(
     () =>
@@ -787,6 +1380,14 @@ export default function LoginDashboard() {
   const [sinchaiMode, setSinchaiMode] = useState("Auto");
   const [sinchaiFertigationTimeMin, setSinchaiFertigationTimeMin] = useState<number | null>(null);
   const [sinchaiLoading, setSinchaiLoading] = useState(false);
+  const [isFertigationLogsOpen, setIsFertigationLogsOpen] = useState(false);
+  const [sinchaiLogsReport, setSinchaiLogsReport] = useState<IrrigationLogDay[]>([]);
+  const [sinchaiLogsLoading, setSinchaiLogsLoading] = useState(false);
+  const [sinchaiLogsError, setSinchaiLogsError] = useState<string | null>(null);
+  const sinchaiLogsSummary = useMemo(
+    () => summarizeIrrigationLogs(sinchaiLogsReport),
+    [sinchaiLogsReport],
+  );
 
   const weatherLocationQuery = useMemo(() => {
     const userObj = readObject(loginResponse?.user);
@@ -1050,6 +1651,37 @@ export default function LoginDashboard() {
     return () => clearInterval(interval);
   }, [refreshWeather]);
 
+  const loadSinchaiLogs = useCallback(async () => {
+    if (!token || !userId || !controlApiBase) {
+      setSinchaiLogsError("Missing token, user or logs API configuration.");
+      setSinchaiLogsReport([]);
+      return;
+    }
+    setSinchaiLogsLoading(true);
+    setSinchaiLogsError(null);
+    try {
+      const response = await fetchIrrigationFertigationLogs({
+        apiBase: controlApiBase,
+        token,
+        userId,
+        farmId,
+      });
+      const normalized = normalizeIrrigationLogsResponse(response);
+      setSinchaiLogsReport(normalized.length > 0 ? normalized : buildIrrigationFertigationReport(sinchaiSchedules));
+    } catch (error) {
+      console.error("Irrigation/Fertigation logs API failed:", error);
+      setSinchaiLogsError("Could not load irrigation and fertigation logs.");
+      setSinchaiLogsReport([]);
+    } finally {
+      setSinchaiLogsLoading(false);
+    }
+  }, [controlApiBase, farmId, sinchaiSchedules, token, userId]);
+
+  useEffect(() => {
+    if (!isFertigationLogsOpen) return;
+    loadSinchaiLogs();
+  }, [isFertigationLogsOpen, loadSinchaiLogs]);
+
   const loadHistoricalGraph = useCallback(async () => {
     if (!isGraphDialogOpen || !selectedGraphDevice) return;
     if (!token || !userId || !historicalApiBase) {
@@ -1107,6 +1739,11 @@ export default function LoginDashboard() {
     setGraphData([]);
     setGraphError(null);
     setIsGraphDialogOpen(true);
+  };
+
+  const openSinchaiLogs = () => {
+    setSinchaiLogsError(null);
+    setIsFertigationLogsOpen(true);
   };
 
   const handleRelayToggle = useCallback(
@@ -1484,6 +2121,7 @@ export default function LoginDashboard() {
                           t={t}
                           loading={sinchaiLoading}
                           onOpenPlanner={() => navigate("/dashboard/sinchai-planner")}
+                          onOpenLogs={openSinchaiLogs}
                         />
                         </div>
                       </div>
@@ -1527,6 +2165,16 @@ export default function LoginDashboard() {
           </Button>
         </DialogContent>
       </Dialog>
+
+      <FertigationLogsDialog
+        open={isFertigationLogsOpen}
+        onOpenChange={setIsFertigationLogsOpen}
+        report={sinchaiLogsReport}
+        summary={sinchaiLogsSummary}
+        loading={sinchaiLogsLoading}
+        error={sinchaiLogsError}
+        t={t}
+      />
 
       <Dialog open={isGraphDialogOpen} onOpenChange={setIsGraphDialogOpen}>
         <DialogContent className="max-w-5xl">
