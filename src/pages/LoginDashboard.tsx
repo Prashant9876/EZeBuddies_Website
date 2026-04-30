@@ -1200,7 +1200,6 @@ function FertigationLogsDialog({
                             <div className="space-y-3 text-sm text-slate-700">
                               {[
                                 [t("sinchaiPlanner.startTime"), event.refill.start_time],
-                                [t("sinchaiPlanner.duration"), `${event.refill.refill_duration_min ?? "--"} min`],
                                 [t("dashboard.refillStatus"), event.refill.refill_status],
                                 [t("dashboard.waterLevel"), event.refill.water_level],
                               ].map(([label, value]) => (
