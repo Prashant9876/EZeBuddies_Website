@@ -451,12 +451,12 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-0">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-white via-emerald-50/70 to-cyan-50/60 p-4 shadow-[0_18px_40px_-28px_rgba(15,130,96,0.55)] md:-mx-16 md:w-[calc(100%+8rem)]"
+          className="w-full rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-white via-emerald-50/70 to-cyan-50/60 p-4 shadow-[0_18px_40px_-28px_rgba(15,130,96,0.55)] sm:p-5"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -559,8 +559,8 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{t("planner.growthStagesTitle")}</p>
                     {card.growth_stages && card.growth_stages.length > 0 ? (
-                      <div className="overflow-x-auto pb-1">
-                        <div className="relative flex min-w-max items-stretch gap-3 pr-1">
+                      <div className="overflow-x-auto pb-2">
+                        <div className="relative flex min-w-max items-stretch gap-2 pr-1 sm:gap-3">
                           <div className="pointer-events-none absolute left-2 right-2 top-7 h-px bg-gradient-to-r from-emerald-200 via-sky-200 to-cyan-200" />
                           {(() => {
                             const currentStageIndex = getCurrentStageIndex(card);
@@ -583,8 +583,8 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
                                   initial={{ opacity: 0, y: 12 }}
                                   animate={{ opacity: 1, y: 0 }}
                                   transition={{ duration: 0.25, delay: stageIndex * 0.05 }}
-                                  whileHover={{ y: -3, scale: 1.01 }}
-                                  className={`relative w-72 rounded-2xl border p-3 transition ${
+                                whileHover={{ y: -3, scale: 1.01 }}
+                                  className={`relative w-[16rem] max-w-[85vw] rounded-2xl border p-2.5 transition sm:w-72 sm:p-3 md:w-80 ${
                                     active
                                       ? "scale-[1.02] border-emerald-400 bg-gradient-to-b from-emerald-50 via-white to-emerald-50/50 shadow-[0_14px_32px_-16px_rgba(20,130,90,0.7)]"
                                       : completed
@@ -621,7 +621,7 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
                                     </p>
                                     <p className={`text-sm font-bold ${active ? "text-emerald-800" : "text-slate-800"}`}>{stage.days}</p>
                                   </div>
-                                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                                  <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                                     {stage.climate_day_temperature ? (
                                       <div className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1">
                                         <p className="text-[10px] font-semibold text-sky-700">{t("planner.optimalDayTemperature")}</p>
@@ -647,7 +647,7 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
                                       </div>
                                     ) : null}
                                   </div>
-                                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                                  <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                                     {stage.ideal_height_cm ? (
                                       <div className="rounded-lg border border-teal-200 bg-teal-50 px-2 py-1.5">
                                         <p className="text-[10px] font-semibold text-teal-700">{t("planner.stageHeight")}</p>
@@ -666,7 +666,7 @@ export function SolutionPlannerPage({ title, solutionName, plannerSection }: Sol
                                     )}
                                   </div>
                                   {hasNutrition ? (
-                                    <div className="mt-2 grid grid-cols-3 gap-1.5">
+                                    <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                                       <div className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1">
                                         <p className="text-[10px] font-semibold text-violet-700">{t("planner.optimalNutritionEc")}</p>
                                         <p className="text-[11px] font-semibold text-violet-900">{stage.nutrition_ec ?? "—"}</p>

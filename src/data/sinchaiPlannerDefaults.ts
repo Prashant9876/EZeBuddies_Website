@@ -12,6 +12,7 @@ export function buildDefaultSinchaiSchedule(scheduleNo: number) {
     schedule_name: `Schedule ${scheduleNo}`,
     start_time: "",
     refill_duration_min: 10,
+    water_level_liters: null,
     irrigation_duration_min: 15,
     valves: [sinchaiValveOptions[0]],
     days: ["Mon", "Wed", "Fri"] as SinchaiDay[],

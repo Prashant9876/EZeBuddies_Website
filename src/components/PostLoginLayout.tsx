@@ -279,32 +279,32 @@ export function PostLoginLayout() {
         )}
       </AnimatePresence>
 
-      <main className="p-4 md:p-7">
+      <main className="min-w-0 w-full p-3 sm:p-4 md:p-7">
         <motion.header
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
-          className="sticky top-3 z-30 mb-6 rounded-3xl border border-sky-200/70 bg-white/85 px-6 py-7 shadow-[0_10px_35px_-20px_rgba(2,80,130,0.45)] backdrop-blur md:px-8 md:py-9"
+          className="sticky top-2 z-30 mb-4 rounded-3xl border border-sky-200/70 bg-white/85 px-4 py-4 shadow-[0_10px_35px_-20px_rgba(2,80,130,0.45)] backdrop-blur sm:px-5 sm:py-5 md:top-3 md:mb-6 md:px-8 md:py-9"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" onClick={() => setIsNavOpen(true)} aria-label={t("dashboard.navTitle")} className="h-14 w-14 rounded-2xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="outline" size="icon" onClick={() => setIsNavOpen(true)} aria-label={t("dashboard.navTitle")} className="h-12 w-12 rounded-2xl sm:h-14 sm:w-14">
                 <Menu className="h-6 w-6" />
               </Button>
-              <div className="flex items-center gap-4">
-                <img src={logo} alt="EzeBuddies logo" className="h-24 w-24 object-contain" />
+              <div className="flex items-center gap-3 sm:gap-4">
+                <img src={logo} alt="EzeBuddies logo" className="h-16 w-16 object-contain sm:h-20 sm:w-20 lg:h-24 lg:w-24" />
                 <div>
-                  <p className="text-sm font-medium uppercase tracking-[0.18em] text-sky-700/80">EzeBuddies</p>
-                  <h1 className="font-display text-4xl font-semibold text-slate-800">ezeGreen Suite</h1>
+                  <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-sky-700/80 sm:text-sm">EzeBuddies</p>
+                  <h1 className="font-display text-2xl font-semibold text-slate-800 sm:text-3xl lg:text-4xl">ezeGreen Suite</h1>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50/80 px-5 py-2.5 text-base font-semibold text-sky-800">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50/80 px-4 py-2 text-sm font-semibold text-sky-800 sm:px-5 sm:py-2.5 sm:text-base">
                 <Sparkles className="h-4 w-4" />
                 {pageTitle}
               </div>
-              <Button variant="destructive" className="rounded-full px-5" onClick={handleLogout}>
+              <Button variant="destructive" className="rounded-full px-4 sm:px-5" onClick={handleLogout}>
                 {t("dashboard.logout")}
               </Button>
             </div>

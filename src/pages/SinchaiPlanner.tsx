@@ -1716,7 +1716,7 @@ export default function SinchaiPlanner() {
                             />
                           </div>
                         </div>
-                        <div className="grid gap-4 md:grid-cols-3">
+                        <div className="grid gap-4 md:grid-cols-4">
                           <div className="space-y-2">
                             <Label>{t("sinchaiPlanner.scheduleName")}</Label>
                             <Input
@@ -1756,6 +1756,23 @@ export default function SinchaiPlanner() {
                                 updateSchedule(selectedSchedule.schedule_no, (prev) => ({
                                   ...prev,
                                   refill_duration_min: event.target.value ? Number(event.target.value) : null,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t("sinchaiPlanner.waterLevelLiters")}</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.1"
+                              value={selectedSchedule.water_level_liters ?? ""}
+                              disabled={!(selectedSchedule.refill_enabled ?? true)}
+                              placeholder={t("sinchaiPlanner.waterLevelLiters")}
+                              onChange={(event) =>
+                                updateSchedule(selectedSchedule.schedule_no, (prev) => ({
+                                  ...prev,
+                                  water_level_liters: event.target.value ? Number(event.target.value) : null,
                                 }))
                               }
                             />
